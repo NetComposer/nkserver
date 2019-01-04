@@ -1,0 +1,130 @@
+%% -------------------------------------------------------------------
+%%
+%% Copyright (c) 2018 Carlos Gonzalez Florido.  All Rights Reserved.
+%%
+%% This file is provided to you under the Apache License,
+%% Version 2.0 (the "License"); you may not use this file
+%% except in compliance with the License.  You may obtain
+%% a copy of the License at
+%%
+%%   http://www.apache.org/licenses/LICENSE-2.0
+%%
+%% Unless required by applicable law or agreed to in writing,
+%% software distributed under the License is distributed on an
+%% "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+%% KIND, either express or implied.  See the License for the
+%% specific language governing permissions and limitations
+%% under the License.
+%%
+%% -------------------------------------------------------------------
+
+%% @doc Default callbacks for plugin definitions
+-module(nkserver_plugin).
+-author('Carlos Gonzalez <carlosj.gf@gmail.com>').
+-export([plugin_deps/0, plugin_group/0, plugin_config/4, plugin_cache/4,
+          plugin_start/4, plugin_update/5, plugin_stop/4]).
+-export_type([continue/0]).
+
+-type id() :: nkserver:id().
+-type class() :: nkserver:class().
+-type package() :: nkserver:package().
+-type config() :: config().
+-type continue() :: continue | {continue, list()}.
+
+
+%% ===================================================================
+%% Plugin Callbacks
+%% ===================================================================
+
+
+%% @doc Called to get the list of plugins this package/plugin depends on.
+%% If the option 'optional' is used, and the plugin could not be loaded, it is ignored
+-callback plugin_deps() ->
+    [module() | {module(), optional}].
+
+
+%% @doc Optionally set the plugin 'group'
+%% All plugins within a group are added a dependency on the previous defined plugins
+%% in the same group.
+%% This way, the order of callbacks is the same as the order plugins are defined
+%% in this group.
+-callback plugin_group() ->
+    term() | undefined.
+
+
+%% @doc This function must parse any configuration for this plugin,
+%% and can optionally modify it
+%% Top-level plugins will be called first, so they can set up configurations for low-level
+-callback plugin_config(id(), class(), config(), package()) ->
+    ok | {ok, config()} | {error, term()}.
+
+
+%% @doc This function, if implemented, is called after all configuration have been
+%% processed, and before starting any service.
+%% The returned map is stored as an Erlang term inside the dispatcher module,
+%% and can be retrieved calling nkserver:get_config/3
+-callback plugin_cache(id(), class(), config(), package()) ->
+    ok | {ok, map()} | {error, term()}.
+
+
+%% @doc Called during service's start
+%% All plugins are started in parallel. If a plugin depends on another,
+%% it can wait for a while, checking nkserver_srv_plugin_sup:get_pid/2 or
+%% calling nkserver_srv:get_status/1
+%% This call is non-blocking, called at each node
+-callback plugin_start(id(), class(), config(), package()) ->
+    ok | {error, term()}.
+
+
+%% @doc Called during service's stop
+%% The supervisor pid, if started, if passed
+%% After the call, the supervisor will be stopped
+%% This call is non-blocking, except for full service stop
+-callback plugin_stop(id(), class(), config(), package()) ->
+    ok | {error, term()}.
+
+
+
+%% @doc Called during service's update, for plugins with updated configuration
+%% This call is non-blocking, called at each node
+-callback plugin_update(id(), class(), New::config(), Old::config(),
+                        package()) ->
+    ok | {error, term()}.
+
+
+
+%% ===================================================================
+%% Default implementation
+%% ===================================================================
+
+
+
+plugin_deps() ->
+	[].
+
+
+plugin_group() ->
+	undefined.
+
+
+plugin_config(_Id, _Class, _Config, _Package) ->
+    ok.
+
+
+plugin_cache(_Id, _Class, _Config, _Package) ->
+    ok.
+
+
+plugin_start(_Id, _Class, _Config, _Package) ->
+    ok.
+
+
+plugin_stop(_Id, _Class, _Config, _Package) ->
+	ok.
+
+
+plugin_update(_Id, _Class, _NewConfig, _OldConfig, _Package) ->
+    ok.
+
+
+

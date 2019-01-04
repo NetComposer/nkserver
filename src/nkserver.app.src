@@ -1,0 +1,17 @@
+{application, nkserver, [
+    {description, "Netcomposer Packages"},
+    {vsn, "develop"},
+    {modules, []},
+    {registered, []},
+    {mod, {nkserver_app, []}},
+    {applications, [
+        kernel,
+        stdlib,
+        crypto,
+        ssl,
+        lager,
+        nklib
+    ]},
+    {env, [
+    ]}
+]}.
