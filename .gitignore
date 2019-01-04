@@ -1,13 +1,7 @@
-deps
-erlcinfo
-data
-dev
 log
-rel/netcomp
 ebin
 .eunit
 .DS_Store
-nimcache
 _build
-rebar.lock
 /nkserver.version
+/.rebar3
