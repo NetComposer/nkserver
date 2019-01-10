@@ -18,7 +18,7 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc Supervisor for the packages
+%% @doc Supervisor for the services
 -module(nkserver_workers_sup).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(supervisor).
@@ -39,19 +39,19 @@
 
 
 %% @private
--spec start_link(nkserver:package()) ->
+-spec start_link(nkserver:service()) ->
     {ok, pid()} | {error, term()}.
 
-start_link(#{id:=PkgId}) ->
+start_link(#{id:=SrvId}) ->
     ChildSpec = {{one_for_one, 10, 60}, []},
     {ok, Pid} = supervisor:start_link(?MODULE, ChildSpec),
-    yes = nklib_proc:register_name({?MODULE, PkgId}, Pid),
+    yes = nklib_proc:register_name({?MODULE, SrvId}, Pid),
     {ok, Pid}.
 
 
 
 %% @private
-%% Shared for main supervisor and package supervisor
+%% Shared for main supervisor and service supervisor
 init(ChildsSpec) ->
     {ok, ChildsSpec}.
 
@@ -60,8 +60,8 @@ init(ChildsSpec) ->
 -spec add_child(nkserver:id()|pid(), supervisor:child_spec()) ->
     {ok, pid()} | {error, term()}.
 
-add_child(PkgId, Spec) ->
-    Pid = get_pid(PkgId),
+add_child(SrvId, Spec) ->
+    Pid = get_pid(SrvId),
     case supervisor:start_child(Pid, Spec) of
         {ok, ChildPid} ->
             {ok, ChildPid};
@@ -84,8 +84,8 @@ add_child(PkgId, Spec) ->
 -spec remove_child(nkserver:id()|pid(), term()) ->
     ok | {error, term()}.
 
-remove_child(PkgId, ChildId) ->
-    Pid = get_pid(PkgId),
+remove_child(SrvId, ChildId) ->
+    Pid = get_pid(SrvId),
     case supervisor:terminate_child(Pid, ChildId) of
         ok ->
             supervisor:delete_child(Pid, ChildId),
@@ -99,11 +99,11 @@ remove_child(PkgId, ChildId) ->
 -spec remove_all_childs(nkserver:id()|pid()) ->
     ok.
 
-remove_all_childs(PkgId) ->
-    Pid = get_pid(PkgId),
+remove_all_childs(SrvId) ->
+    Pid = get_pid(SrvId),
     lists:foreach(
         fun({Id, _ChildPid}) -> remove_child(Pid, Id) end,
-        get_childs(PkgId)).
+        get_childs(SrvId)).
 
 
 %% @doc Starts or updates a child
@@ -114,8 +114,8 @@ remove_all_childs(PkgId) ->
 -spec update_child(nkserver:id()|pid(), supervisor:child_spec(), update_opts()) ->
     {added, pid()} | {upgraded, pid()} | not_updated | {error, term()}.
 
-update_child(PkgId, #{id:=ChildId}=Spec, Opts) ->
-    Pid = get_pid(PkgId),
+update_child(SrvId, #{id:=ChildId}=Spec, Opts) ->
+    Pid = get_pid(SrvId),
     case supervisor:get_childspec(Pid, ChildId) of
         {ok, Spec} ->
             not_updated;
@@ -154,11 +154,11 @@ update_child(PkgId, #{id:=ChildId}=Spec, Opts) ->
 -spec update_child_multi(term()|pid(), [supervisor:child_spec()], update_opts()) ->
     ok | upgraded | not_updated | {error, term()}.
 
-update_child_multi(_PkgId, [], _Opts) ->
+update_child_multi(_SrvId, [], _Opts) ->
     not_updated;
 
-update_child_multi(PkgId, SpecList, Opts) ->
-    Pid = get_pid(PkgId),
+update_child_multi(SrvId, SpecList, Opts) ->
+    Pid = get_pid(SrvId),
     NewChildIds = [ChildId || #{id:=ChildId} <- SpecList],
     NewChildKeys = [element(1, ChildId) || ChildId <- NewChildIds],
     [ChildKey] = lists:usort(NewChildKeys),
@@ -204,16 +204,16 @@ update_child_multi(Pid, [Spec|Rest], Opts, Res) ->
 
 
 
-%% @private Get pid() of master supervisor for all packages
+%% @private Get pid() of master supervisor for all services
 get_pid(Pid) when is_pid(Pid) ->
     Pid;
-get_pid(PkgId) ->
-    nklib_proc:whereis_name({?MODULE, PkgId}).
+get_pid(SrvId) ->
+    nklib_proc:whereis_name({?MODULE, SrvId}).
 
 
 %% @doc
-get_childs(PkgId) ->
-    [{I, Pid} || {I, Pid, _, _} <- supervisor:which_children(get_pid(PkgId))].
+get_childs(SrvId) ->
+    [{I, Pid} || {I, Pid, _, _} <- supervisor:which_children(get_pid(SrvId))].
 
 
 

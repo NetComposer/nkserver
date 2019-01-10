@@ -18,8 +18,8 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc Supervisor for the packages
--module(nkserver_package_sup).
+%% @doc Supervisor for the services
+-module(nkserver_srv_sup).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(supervisor).
 
@@ -30,15 +30,15 @@
 -spec start_link(nkserver:class(), nkserver:id(), nkserver:spec()) ->
     {ok, pid()} | {error, term()}.
 
-start_link(PkgClass, PkgId, Opts) ->
-    case get_pid(PkgId) of
+start_link(PkgClass, SrvId, Opts) ->
+    case get_pid(SrvId) of
         undefined ->
-            case nkserver_util:get_spec(PkgId, PkgClass, Opts) of
+            case nkserver_util:get_spec(SrvId, PkgClass, Opts) of
                 {ok, Spec} ->
                     case nkserver_config:config(Spec, #{}) of
-                        {ok, Package} ->
-                            ChildSpec = {{one_for_one, 10, 60}, get_childs(Package)},
-                            supervisor:start_link(?MODULE, {PkgId, ChildSpec});
+                        {ok, Service} ->
+                            ChildSpec = {{one_for_one, 10, 60}, get_childs(Service)},
+                            supervisor:start_link(?MODULE, {SrvId, ChildSpec});
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -50,8 +50,8 @@ start_link(PkgClass, PkgId, Opts) ->
     end.
 
 
-stop(PkgId) ->
-    case get_pid(PkgId) of
+stop(SrvId) ->
+    case get_pid(SrvId) of
         undefined ->
             {error, not_started};
         Pid ->
@@ -60,19 +60,19 @@ stop(PkgId) ->
 
 
 %% @private
-get_childs(Package) ->
+get_childs(Service) ->
     [
         #{
             id => supervisor,
             type => supervisor,
-            start => {nkserver_workers_sup, start_link, [Package]},
+            start => {nkserver_workers_sup, start_link, [Service]},
             restart => permanent,
             shutdown => 15000
         },
         #{
             id => server,
             type => worker,
-            start => {nkserver_srv, start_link, [Package]},
+            start => {nkserver_srv, start_link, [Service]},
             restart => permanent,
             shutdown => 15000
         }
@@ -81,7 +81,7 @@ get_childs(Package) ->
 
 
 %% @private
-%% Shared for main supervisor and package supervisor
+%% Shared for main supervisor and service supervisor
 init({Id, ChildsSpec}) ->
     ets:new(Id, [named_table, public]),
     yes = nklib_proc:register_name({?MODULE, Id}, self()),
@@ -89,11 +89,11 @@ init({Id, ChildsSpec}) ->
     {ok, ChildsSpec}.
 
 
-%% @private Get pid() of master supervisor for all packages
+%% @private Get pid() of master supervisor for all services
 get_pid(Pid) when is_pid(Pid) ->
     Pid;
-get_pid(PkgId) ->
-    nklib_proc:whereis_name({?MODULE, PkgId}).
+get_pid(SrvId) ->
+    nklib_proc:whereis_name({?MODULE, SrvId}).
 
 
 get_all() ->

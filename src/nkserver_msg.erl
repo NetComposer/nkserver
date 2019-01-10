@@ -35,8 +35,8 @@
 -spec is_msg(nkserver:id(), nkserver:msg()) ->
     {true, term(), term()} | false.
 
-is_msg(PkgId, Msg) ->
-    case ?CALL_SRV(PkgId, msg, [PkgId, Msg]) of
+is_msg(SrvId, Msg) ->
+    case ?CALL_SRV(SrvId, msg, [SrvId, Msg]) of
         {Code, Fmt, List} when is_list(Fmt), is_list(List) ->
             {true, get_msg_code(Code), get_msg_fmt(Fmt, List)};
         {Fmt, List} when is_list(Fmt), is_list(List) ->
@@ -54,8 +54,8 @@ is_msg(PkgId, Msg) ->
 -spec msg(nkserver:id(), nkserver:msg()) ->
     {binary(), binary()}.
 
-msg(PkgId, Msg) ->
-    case is_msg(PkgId, Msg) of
+msg(SrvId, Msg) ->
+    case is_msg(SrvId, Msg) of
         {true, Code, Reason} ->
             {Code, Reason};
         false ->

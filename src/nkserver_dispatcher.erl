@@ -73,16 +73,16 @@ parse_transform(Forms, _Opts) ->
 
 
 %% @doc Called to generate the dispatcher module
-compile(#{id:=Id}=Package) ->
+compile(#{id:=Id}=Service) ->
     maybe_generate_mod(Id),
-    {DispatcherMod, ModForms} = make_module(Package),
+    {DispatcherMod, ModForms} = make_module(Service),
     Opts = [report_errors, report_warnings],
     {ok, _Tree} = nklib_code:do_compile(DispatcherMod, ModForms, Opts),
     ok.
 
 
 %% @doc Called from function nkserver_on_load/0 in callback module
-%% - if no package is running, ignore and load the module
+%% - if no service is running, ignore and load the module
 %% - if it is running, and the reload is not because of our recompilation
 %%   we abort the loading and recompile ourselves
 %% - if it is running, but the reload is from our our recompilation
@@ -125,37 +125,37 @@ maybe_generate_mod(Id) ->
 
 
 %% @private
-make_module(#{id:=Id}=Package) ->
-    ?PKG_LOG(debug, "starting dispatcher recompilation...", [], Package),
-    PackageKeys = [
+make_module(#{id:=Id}=Service) ->
+    ?SRV_LOG(debug, "starting dispatcher recompilation...", [], Service),
+    ServiceKeys = [
         id, class, uuid, hash, timestamp, plugins, expanded_plugins,
         config, config_cache
     ],
-    {PackageExported, PackageFuns} = make_package_funs(PackageKeys, Package),
-    PluginList = maps:get(expanded_plugins, Package),
+    {ServiceExported, ServiceFuns} = make_service_funs(ServiceKeys, Service),
+    PluginList = maps:get(expanded_plugins, Service),
     {PluginExported, PluginFuns} = make_plugin_funs(PluginList, Id),
-    {CacheExported, CacheFuns} = make_cache_funs(Package),
-    AllFuns = PackageFuns ++ PluginFuns ++ CacheFuns,
-    AllExported = PackageExported ++ PluginExported ++ CacheExported,
+    {CacheExported, CacheFuns} = make_cache_funs(Service),
+    AllFuns = ServiceFuns ++ PluginFuns ++ CacheFuns,
+    AllExported = ServiceExported ++ PluginExported ++ CacheExported,
     ModForms = make_module(Id, AllExported, AllFuns),
     DispatcherMod = gen_dispatcher_mod(Id),
     case nkserver_app:get(saveDispatcherSource) of
         true ->
             Path = nkserver_app:get(logPath),
-            ?PKG_LOG(debug, "saving to disk...", [], Package),
+            ?SRV_LOG(debug, "saving to disk...", [], Service),
             ok = nklib_code:write(DispatcherMod, ModForms, Path);
         false ->
             ok
     end,
-    ?PKG_LOG(info, "dispatcher compilation completed", [], Package),
+    ?SRV_LOG(info, "dispatcher compilation completed", [], Service),
     {DispatcherMod, ModForms}.
 
 
 %% @private
-make_package_funs(FunIds, Package) ->
+make_service_funs(FunIds, Service) ->
     Export = [{Id, 0} || Id <- FunIds],
     Funs = lists:foldl(
-        fun(K, Acc) -> [nklib_code:getter(K, maps:get(K, Package))|Acc] end,
+        fun(K, Acc) -> [nklib_code:getter(K, maps:get(K, Service))|Acc] end,
         [],
         FunIds),
     {Export, Funs}.
@@ -246,9 +246,9 @@ gen_dispatcher_mod(Id) -> list_to_atom(atom_to_list(Id)++"_nkserver_dispatcher")
 
 
 %%%% @doc Called to generate the dispatcher module
-%%compile(#{id:=Id}=Package) ->
+%%compile(#{id:=Id}=Service) ->
 %%    ModForms1 = get_ebin_forms(Id),
-%%    ModForms2 = make_module(Package, ModForms1),
+%%    ModForms2 = make_module(Service, ModForms1),
 %%    ok = nklib_store:put({nkserver_in_compile, Id}, true, [{ttl, 5}]),
 %%    % We include debug_info here because it seems c() in the sell will somehow
 %%    % take these settings. If not, c() will remove the debug_info from beam
@@ -290,28 +290,28 @@ gen_dispatcher_mod(Id) -> list_to_atom(atom_to_list(Id)++"_nkserver_dispatcher")
 %%
 %%
 %%%% @private
-%%make_module(#{id:=Id}=Package, ModForms) ->
-%%    ?PKG_LOG(debug, "starting dispatcher recompilation...", [], Package),
+%%make_module(#{id:=Id}=Service, ModForms) ->
+%%    ?SRV_LOG(debug, "starting dispatcher recompilation...", [], Service),
 %%    {ExternalFuns, InternalFuns} = find_module_funs(ModForms),
 %%    ExternalFuns2 = rename_external_funs(ExternalFuns),
-%%    PackageKeys = [id, class, uuid, hash, timestamp, plugins, expanded_plugins, config_cache],
-%%    {PackageExported, PackageFuns} = make_package_funs(PackageKeys, Package),
-%%    PluginList = maps:get(expanded_plugins, Package),
+%%    ServiceKeys = [id, class, uuid, hash, timestamp, plugins, expanded_plugins, config_cache],
+%%    {ServiceExported, ServiceFuns} = make_package_funs(ServiceKeys, Service),
+%%    PluginList = maps:get(expanded_plugins, Service),
 %%    ExternalExported = [{Name, Arity} || {function, _, Name, Arity, _} <- ExternalFuns],
 %%    {PluginExported, PluginFuns} = make_plugin_funs(PluginList, Id, ExternalExported),
-%%    {CacheExported, CacheFuns} = make_cache_funs(Package),
-%%    AllFuns = InternalFuns ++ ExternalFuns2 ++ PackageFuns ++ PluginFuns ++ CacheFuns,
-%%    AllExported = PackageExported ++ PluginExported ++ CacheExported,
+%%    {CacheExported, CacheFuns} = make_cache_funs(Service),
+%%    AllFuns = InternalFuns ++ ExternalFuns2 ++ ServiceFuns ++ PluginFuns ++ CacheFuns,
+%%    AllExported = ServiceExported ++ PluginExported ++ CacheExported,
 %%    ModForms2 = make_module(Id, AllExported, AllFuns, ModForms),
 %%    case nkserver_app:get(saveDispatcherSource) of
 %%        true ->
 %%            LogPath = nkserver_app:get(logPath),
-%%            ?PKG_LOG(debug, "saving to disk...", [], Package),
+%%            ?SRV_LOG(debug, "saving to disk...", [], Service),
 %%            ok = nklib_code:write(nklib_util:to_list(Id) ++ "_compiled", ModForms2, LogPath);
 %%        false ->
 %%            ok
 %%    end,
-%%    ?PKG_LOG(info, "dispatcher compilation completed", [], Package),
+%%    ?SRV_LOG(info, "dispatcher compilation completed", [], Service),
 %%    ModForms2.
 
 

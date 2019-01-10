@@ -31,9 +31,9 @@
 
 
 %% @doc
-config(Spec, OldPackage) ->
+config(Spec, OldService) ->
     try
-        do_config(Spec, OldPackage)
+        do_config(Spec, OldService)
     catch
         throw:Throw ->
             Throw
@@ -41,11 +41,11 @@ config(Spec, OldPackage) ->
 
 
 %% @private
-do_config(#{id:=Id, class:=Class}=Spec, OldPackage) ->
-    % Take UUID from Spec, or the old Package if not there, or create it
+do_config(#{id:=Id, class:=Class}=Spec, OldService) ->
+    % Take UUID from Spec, or the old Service if not there, or create it
     UUID = case Spec of
         #{uuid:=SpecUUID} ->
-            case OldPackage of
+            case OldService of
                 #{uuid:=ServiceUUID} when ServiceUUID /= SpecUUID ->
                     throw({error, uuid_cannot_be_updated});
                 _ ->
@@ -54,32 +54,32 @@ do_config(#{id:=Id, class:=Class}=Spec, OldPackage) ->
         _ ->
             update_uuid(Id, Spec)
     end,
-    case maps:get(id, OldPackage, Id) of
+    case maps:get(id, OldService, Id) of
         Id ->
             ok;
         _ ->
             throw({error, id_cannot_be_updated})
     end,
-    case maps:get(class, OldPackage, Class) of
+    case maps:get(class, OldService, Class) of
         Class ->
             ok;
         _ ->
             throw({error, class_cannot_be_updated})
     end,
-    Plugins = maps:get(plugins, Spec, maps:get(plugins, OldPackage, [])),
-    Package1 = Spec#{
+    Plugins = maps:get(plugins, Spec, maps:get(plugins, OldService, [])),
+    Service1 = Spec#{
         uuid => UUID,
         plugins => Plugins,
         timestamp =>  nklib_date:epoch(msecs)
     },
-    Package2 = config_plugins(Package1),
-    Package3 = config_cache(Package2),
-    {ok, Package3}.
+    Service2 = config_plugins(Service1),
+    Service3 = config_cache(Service2),
+    {ok, Service3}.
 
 
 %% @private
-config_plugins(Package) ->
-    #{id:=Id, class:=Class, plugins:=Plugins} = Package,
+config_plugins(Service) ->
+    #{id:=Id, class:=Class, plugins:=Plugins} = Service,
     PkgMod = case nkserver_util:get_package_class_module(Class) of
         undefined ->
             throw({error, {package_class_invalid, Class}});
@@ -88,27 +88,27 @@ config_plugins(Package) ->
     end,
     % Plugins2 is the expanded list of plugins, first bottom, last top (Id)
     Plugins2 = expand_plugins(Id, [PkgMod|Plugins]),
-    ?PKG_LOG(debug, "starting configuration", [], Package),
+    ?SRV_LOG(debug, "starting configuration", [], Service),
     % High to low
-    Package2 = config_plugins(lists:reverse(Plugins2), Package),
-    Hash = erlang:phash2(maps:without([hash, uuid], Package2)),
-    Package2#{
+    Service2 = config_plugins(lists:reverse(Plugins2), Service),
+    Hash = erlang:phash2(maps:without([hash, uuid], Service2)),
+    Service2#{
         expanded_plugins => Plugins2,
         hash => Hash
     }.
 
 
 %% @private
-config_plugins([], Package) ->
-    Package;
+config_plugins([], Service) ->
+    Service;
 
-config_plugins([Id|Rest], #{id:=Id}=Package) ->
-    config_plugins(Rest, Package);
+config_plugins([Id|Rest], #{id:=Id}=Service) ->
+    config_plugins(Rest, Service);
 
-config_plugins([PluginId|Rest], #{class:=Class, id:=Id, config:=Config}=Package) ->
+config_plugins([PluginId|Rest], #{id:=Id, config:=Config}=Service) ->
     Mod = get_plugin_mod(PluginId),
-    ?PKG_LOG(debug, "calling config for ~s (~s)", [Id, Mod], Package),
-    Config2 = case nklib_util:apply(Mod, plugin_config, [Id, Class, Config, Package]) of
+    ?SRV_LOG(debug, "calling config for ~s (~s)", [Id, Mod], Service),
+    Config2 = case nklib_util:apply(Mod, plugin_config, [Id, Config, Service]) of
         ok ->
             Config;
         not_exported ->
@@ -118,29 +118,29 @@ config_plugins([PluginId|Rest], #{class:=Class, id:=Id, config:=Config}=Package)
         {ok, NewConfig} ->
             NewConfig;
         {error, Error} ->
-            throw({error, {package_config_error, {Id, Error}}})
+            throw({error, {service_config_error, {Id, Error}}})
     end,
-    config_plugins(Rest, Package#{config:=Config2}).
+    config_plugins(Rest, Service#{config:=Config2}).
 
 
 %% @private
-config_cache(Package) ->
-    #{expanded_plugins:=Plugins} = Package,
-    Cache = config_cache(Plugins, Package, #{}),
-    Package#{config_cache => Cache}.
+config_cache(Service) ->
+    #{expanded_plugins:=Plugins} = Service,
+    Cache = config_cache(Plugins, Service, #{}),
+    Service#{config_cache => Cache}.
 
 
 %% @private
-config_cache([], _Package, Acc) ->
+config_cache([], _Service, Acc) ->
     Acc;
 
-config_cache([Id|Rest], #{id:=Id}=Package, Acc) ->
-    config_cache(Rest, Package, Acc);
+config_cache([Id|Rest], #{id:=Id}=Service, Acc) ->
+    config_cache(Rest, Service, Acc);
 
-config_cache([PluginId|Rest], #{class:=Class, id:=Id, config:=Config}=Package, Acc) ->
+config_cache([PluginId|Rest], #{id:=Id, config:=Config}=Service, Acc) ->
     Mod = get_plugin_mod(PluginId),
-    ?PKG_LOG(debug, "calling config cache for ~s (~s)", [Id, Mod], Package),
-    Acc2 = case nklib_util:apply(Mod, plugin_cache, [Id, Class, Config, Package]) of
+    ?SRV_LOG(debug, "calling config cache for ~s (~s)", [Id, Mod], Service),
+    Acc2 = case nklib_util:apply(Mod, plugin_cache, [Id, Config, Service]) of
         ok ->
             Acc;
         {ok, Map} when is_map(Map) ->
@@ -150,7 +150,7 @@ config_cache([PluginId|Rest], #{class:=Class, id:=Id, config:=Config}=Package, A
         continue ->
             Acc
     end,
-    config_cache(Rest, Package, Acc2).
+    config_cache(Rest, Service, Acc2).
 
 
 %% @private

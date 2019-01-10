@@ -22,9 +22,9 @@
 -module(nkserver_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([msg/1, msg/2, i18n/3]).
--export([package_srv_init/2, package_srv_handle_call/4, package_srv_handle_cast/3,
-         package_srv_handle_info/3, package_srv_code_change/4, package_srv_terminate/3,
-         package_srv_timed_check/2]).
+-export([srv_init/2, srv_handle_call/4, srv_handle_cast/3,
+         srv_handle_info/3, srv_code_change/4, srv_terminate/3,
+         srv_timed_check/2]).
 
 -export_type([continue/0]).
 
@@ -39,8 +39,20 @@
 -type continue() :: continue | {continue, list()}.
 %-type req() :: #nkreq{}.
 -type user_state() :: map().
--type package() :: nkserver:package().
+-type service() :: nkserver:service().
 
+
+
+%% ===================================================================
+%% Callbacks
+%% ===================================================================
+
+
+%% Called when the service starts, to update the start options.
+-callback config(map()) -> map().
+
+
+-optional_callbacks([config/1]).
 
 
 %% ===================================================================
@@ -77,14 +89,14 @@ msg(file_read_error)   		        -> "File read error";
 msg(internal_error)			        -> "Internal error";
 msg({internal_error, Ref})	        -> {"Internal error: ~s", [Ref]};
 msg(invalid_parameters) 		    -> "Invalid parameters";
-msg(leader_is_down)                 -> "Package leader is down";
+msg(leader_is_down)                 -> "Service leader is down";
 msg(normal_termination) 		    -> "Normal termination";
 msg(not_found) 				        -> "Not found";
 msg(not_implemented) 		        -> "Not implemented";
 msg(ok)                             -> "OK";
 msg(process_down)  			        -> "Process failed";
 msg(process_not_found) 		        -> "Process not found";
-msg(package_not_found) 		        -> "Package not found";
+msg(service_not_found) 		        -> "Service not found";
 msg({syntax_error, Txt})		    -> {"Syntax error: '~s'", [Txt]};
 msg({tls_alert, Txt}) 			    -> {"Error TTL: ~s", [Txt]};
 msg(timeout) 				        -> "Timeout";
@@ -107,71 +119,71 @@ i18n(SrvId, Key, Lang) ->
 
 
 %% ===================================================================
-%% Package Server Callbacks
+%% Service Server Callbacks
 %% ===================================================================
 
 %% @doc Called when a new service starts, first for the top-level plugin
--spec package_srv_init(package(), user_state()) ->
+-spec srv_init(service(), user_state()) ->
 	{ok, user_state()} | {stop, term()}.
 
-package_srv_init(_Package, UserState) ->
+srv_init(_Service, UserState) ->
 	{ok, UserState}.
 
 
 %% @doc Called when the service process receives a handle_call/3.
--spec package_srv_handle_call(term(), {pid(), reference()}, package(), user_state()) ->
+-spec srv_handle_call(term(), {pid(), reference()}, service(), user_state()) ->
 	{reply, term(), user_state()} | {noreply, user_state()} | continue().
 
-package_srv_handle_call(_Msg, _From, _Package, _State) ->
+srv_handle_call(_Msg, _From, _Service, _State) ->
     continue.
 
 
 %% @doc Called when the NkApp process receives a handle_cast/3.
--spec package_srv_handle_cast(term(), package(), user_state()) ->
+-spec srv_handle_cast(term(), service(), user_state()) ->
 	{noreply, user_state()} | continue().
 
-package_srv_handle_cast(_Msg, _Package, _State) ->
+srv_handle_cast(_Msg, _Service, _State) ->
     continue.
 
 
 %% @doc Called when the NkApp process receives a handle_info/3.
--spec package_srv_handle_info(term(), package(), user_state()) ->
+-spec srv_handle_info(term(), service(), user_state()) ->
 	{noreply, user_state()} | continue().
 
-package_srv_handle_info({'EXIT', _, normal}, _Package, State) ->
+srv_handle_info({'EXIT', _, normal}, _Service, State) ->
 	{noreply, State};
 
-package_srv_handle_info(_Msg, _Package, _State) ->
+srv_handle_info(_Msg, _Service, _State) ->
     continue.
 
 
--spec package_srv_code_change(term()|{down, term()}, package(), user_state(), term()) ->
-    ok | {ok, package()} | {error, term()} | continue().
+-spec srv_code_change(term()|{down, term()}, service(), user_state(), term()) ->
+    ok | {ok, service()} | {error, term()} | continue().
 
-package_srv_code_change(OldVsn, _Package, State, Extra) ->
+srv_code_change(OldVsn, _Service, State, Extra) ->
 	{continue, [OldVsn, State, Extra]}.
 
 
 %% @doc Called when a service is stopped
--spec package_srv_terminate(term(), package(), package()) ->
-	{ok, package()}.
+-spec srv_terminate(term(), service(), service()) ->
+	{ok, service()}.
 
-package_srv_terminate(_Reason, _Package, State) ->
+srv_terminate(_Reason, _Service, State) ->
 	{ok, State}.
 
 
 %% @doc Called periodically
--spec package_srv_timed_check(package(), user_state()) ->
+-spec srv_timed_check(service(), user_state()) ->
     {ok, user_state()}.
 
-package_srv_timed_check(_Package, State) ->
+srv_timed_check(_Service, State) ->
     {ok, State}.
 
 
 
 
 %%%% ===================================================================
-%%%% Package Master Callbacks
+%%%% Service Master Callbacks
 %%%% These callbacks are called by the service master process running
 %%%% at each node. One of the will be elected master
 %%%% ===================================================================

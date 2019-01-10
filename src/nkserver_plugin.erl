@@ -21,13 +21,12 @@
 %% @doc Default callbacks for plugin definitions
 -module(nkserver_plugin).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([plugin_deps/0, plugin_group/0, plugin_config/4, plugin_cache/4,
-          plugin_start/4, plugin_update/5, plugin_stop/4]).
+-export([plugin_deps/0, plugin_group/0, plugin_config/3, plugin_cache/3,
+          plugin_start/3, plugin_update/4, plugin_stop/3]).
 -export_type([continue/0]).
 
 -type id() :: nkserver:id().
--type class() :: nkserver:class().
--type package() :: nkserver:package().
+-type service() :: nkserver:service().
 -type config() :: config().
 -type continue() :: continue | {continue, list()}.
 
@@ -37,7 +36,7 @@
 %% ===================================================================
 
 
-%% @doc Called to get the list of plugins this package/plugin depends on.
+%% @doc Called to get the list of plugins this service/plugin depends on.
 %% If the option 'optional' is used, and the plugin could not be loaded, it is ignored
 -callback plugin_deps() ->
     [module() | {module(), optional}].
@@ -55,7 +54,7 @@
 %% @doc This function must parse any configuration for this plugin,
 %% and can optionally modify it
 %% Top-level plugins will be called first, so they can set up configurations for low-level
--callback plugin_config(id(), class(), config(), package()) ->
+-callback plugin_config(id(), config(), service()) ->
     ok | {ok, config()} | {error, term()}.
 
 
@@ -63,7 +62,7 @@
 %% processed, and before starting any service.
 %% The returned map is stored as an Erlang term inside the dispatcher module,
 %% and can be retrieved calling nkserver:get_config/3
--callback plugin_cache(id(), class(), config(), package()) ->
+-callback plugin_cache(id(), config(), service()) ->
     ok | {ok, map()} | {error, term()}.
 
 
@@ -72,7 +71,7 @@
 %% it can wait for a while, checking nkserver_srv_plugin_sup:get_pid/2 or
 %% calling nkserver_srv:get_status/1
 %% This call is non-blocking, called at each node
--callback plugin_start(id(), class(), config(), package()) ->
+-callback plugin_start(id(), config(), service()) ->
     ok | {error, term()}.
 
 
@@ -80,15 +79,15 @@
 %% The supervisor pid, if started, if passed
 %% After the call, the supervisor will be stopped
 %% This call is non-blocking, except for full service stop
--callback plugin_stop(id(), class(), config(), package()) ->
+-callback plugin_stop(id(), config(), service()) ->
     ok | {error, term()}.
 
 
 
 %% @doc Called during service's update, for plugins with updated configuration
 %% This call is non-blocking, called at each node
--callback plugin_update(id(), class(), New::config(), Old::config(),
-                        package()) ->
+-callback plugin_update(id(), New::config(), Old::config(),
+                        service()) ->
     ok | {error, term()}.
 
 
@@ -107,23 +106,23 @@ plugin_group() ->
 	undefined.
 
 
-plugin_config(_Id, _Class, _Config, _Package) ->
+plugin_config(_Id, _Config, _Service) ->
     ok.
 
 
-plugin_cache(_Id, _Class, _Config, _Package) ->
+plugin_cache(_Id, _Config, _Service) ->
     ok.
 
 
-plugin_start(_Id, _Class, _Config, _Package) ->
+plugin_start(_Id, _Config, _Service) ->
     ok.
 
 
-plugin_stop(_Id, _Class, _Config, _Package) ->
+plugin_stop(_Id, _Config, _Service) ->
 	ok.
 
 
-plugin_update(_Id, _Class, _NewConfig, _OldConfig, _Package) ->
+plugin_update(_Id, _NewConfig, _OldConfig, _Service) ->
     ok.
 
 

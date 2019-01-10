@@ -82,18 +82,18 @@ get_package_class_meta(Class) ->
 -spec register_for_changes(nkserver:id()) ->
     ok.
 
-register_for_changes(PkgId) ->
-    nklib_proc:put({notify_updated_service, PkgId}).
+register_for_changes(SrvId) ->
+    nklib_proc:put({notify_updated_service, SrvId}).
 
 
 %% @doc
 -spec notify_updated_service(nkserver:id()) ->
     ok.
 
-notify_updated_service(PkgId) ->
+notify_updated_service(SrvId) ->
     lists:foreach(
-        fun({_, Pid}) -> Pid ! {nkserver_updated, PkgId} end,
-        nklib_proc:values({notify_updated_service, PkgId})).
+        fun({_, Pid}) -> Pid ! {nkserver_updated, SrvId} end,
+        nklib_proc:values({notify_updated_service, SrvId})).
 
 %% @private
 name(Name) ->
@@ -120,12 +120,13 @@ name(Name) ->
 
 
 -spec get_spec(nkserver:id(), nkserver:class(), nkserver:spec()) ->
-    {ok, nkserver:package()} | {error, term()}.
+    {ok, nkserver:service()} | {error, term()}.
 
-get_spec(PkgId, PkgClass, Opts) ->
-    Opts2 = case erlang:function_exported(PkgId, config, 1) of
+get_spec(SrvId, PkgClass, Opts) ->
+    code:ensure_loaded(SrvId),
+    Opts2 = case erlang:function_exported(SrvId, config, 1) of
         true ->
-            PkgId:config(Opts);
+            SrvId:config(Opts);
         false ->
             Opts
     end,
@@ -140,7 +141,7 @@ get_spec(PkgId, PkgClass, Opts) ->
             Opts4 = maps:with(CoreOpts, Opts3),
             Config = maps:without(CoreOpts, Opts3),
             Spec = Opts4#{
-                id => PkgId,
+                id => SrvId,
                 class => PkgClass,
                 config => Config
             },

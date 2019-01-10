@@ -26,7 +26,7 @@
 -export([get_all_status/0, get_all_status/1]).
 -export([get_plugin_config/3, get/2, get/3, put/3, put_new/3, del/2]).
 -export([uuid/1]).
--export_type([id/0, class/0, spec/0, package/0]).
+-export_type([id/0, class/0, spec/0, service/0]).
 
 
 -include("nkserver.hrl").
@@ -50,7 +50,7 @@
     }.
 
 
--type package() ::
+-type service() ::
     #{
         id => module(),
         class => class(),
@@ -73,18 +73,18 @@
 -spec start_link(class(), id(), spec()) ->
     {ok, pid()} | {error, term()}.
 
-start_link(PkgClass, PkgId, Spec) ->
-    nkserver_package_sup:start_link(PkgClass, PkgId, Spec).
+start_link(PkgClass, SrvId, Spec) ->
+    nkserver_srv_sup:start_link(PkgClass, SrvId, Spec).
 
 
 %% @doc
 -spec get_sup_spec(class(), id(), spec()) ->
     {ok, pid()} | {error, term()}.
 
-get_sup_spec(PkgClass, PkgId, Spec) ->
+get_sup_spec(PkgClass, SrvId, Spec) ->
     #{
-        id => {nkserver, PkgId},
-        start => {?MODULE, start_link, [PkgClass, PkgId, Spec]},
+        id => {nkserver, SrvId},
+        start => {?MODULE, start_link, [PkgClass, SrvId, Spec]},
         restart => permanent,
         shutdown => 15000,
         type => supervisor
@@ -95,18 +95,18 @@ get_sup_spec(PkgClass, PkgId, Spec) ->
 -spec update(id(), spec()) ->
     ok | {error, term()}.
 
-update(PkgId, Spec) ->
-    OldConfig = ?CALL_PKG(PkgId, config, []),
+update(SrvId, Spec) ->
+    OldConfig = ?CALL_SRV(SrvId, config, []),
     Spec2 = maps:merge(OldConfig, Spec),
-    replace(PkgId, Spec2).
+    replace(SrvId, Spec2).
 
 
 %% @doc Updates a service configuration in local node
 -spec replace(id(), spec()) ->
     ok | {error, term()}.
 
-replace(PkgId, Spec) ->
-    nkserver_srv:replace(PkgId, Spec).
+replace(SrvId, Spec) ->
+    nkserver_srv:replace(SrvId, Spec).
 
 
 
@@ -121,24 +121,24 @@ get_all_status(Class) ->
 
 
 %% @doc Get a plugin configuration
-get_plugin_config(PkgId, PluginId, Key) ->
-    ?CALL_PKG(PkgId, config_cache, [PluginId, Key]).
+get_plugin_config(SrvId, PluginId, Key) ->
+    ?CALL_SRV(SrvId, config_cache, [PluginId, Key]).
 
 
 %% @doc Gets a value from service's store
 -spec get(id(), term()) ->
     term().
 
-get(PkgId, Key) ->
-    get(PkgId, Key, undefined).
+get(SrvId, Key) ->
+    get(SrvId, Key, undefined).
 
 
 %% @doc Gets a value from service's store
 -spec get(id(), term(), term()) ->
     term().
 
-get(PkgId, Key, Default) ->
-    case ets:lookup(PkgId, Key) of
+get(SrvId, Key, Default) ->
+    case ets:lookup(SrvId, Key) of
         [{_, Value}] -> Value;
         [] -> Default
     end.
@@ -148,8 +148,8 @@ get(PkgId, Key, Default) ->
 -spec put(id(), term(), term()) ->
     ok.
 
-put(PkgId, Key, Value) ->
-    true = ets:insert(PkgId, {Key, Value}),
+put(SrvId, Key, Value) ->
+    true = ets:insert(SrvId, {Key, Value}),
     ok.
 
 
@@ -157,18 +157,18 @@ put(PkgId, Key, Value) ->
 -spec put_new(id(), term(), term()) ->
     true | false.
 
-put_new(PkgId, Key, Value) ->
-    ets:insert_new(PkgId, {Key, Value}).
+put_new(SrvId, Key, Value) ->
+    ets:insert_new(SrvId, {Key, Value}).
 
 
 %% @doc Deletes a value from service's store
 -spec del(id(), term()) ->
     ok.
 
-del(PkgId, Key) ->
-    true = ets:delete(PkgId, Key),
+del(SrvId, Key) ->
+    true = ets:delete(SrvId, Key),
     ok.
 
 
-uuid(PkgId) ->
-    ?CALL_PKG(PkgId, uuid, []).
+uuid(SrvId) ->
+    ?CALL_SRV(SrvId, uuid, []).

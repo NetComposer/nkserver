@@ -20,22 +20,22 @@
 %% -------------------------------------------------------------------
 
 
-%% Package management
+%% Service management
 %% -----------------
 %%
 %% When the service starts, packages_status is empty
 %% - All defined packages will be launched in check_packages, low first
-%% - Packages can return running or failed
+%% - Services can return running or failed
 %% - Periodically we re-launch start for failed ones
 %% - If the package supervisor fails, it is marked as failed
 %%
 %% When the service is updated
-%% - Packages no longer available are removed, and called stop_package
-%% - Packages that stay are marked as upgrading, called update_package
+%% - Services no longer available are removed, and called stop_package
+%% - Services that stay are marked as upgrading, called update_package
 %% - When response is received, they are marked as running or failed
 %%
-%% Package stop
-%% - Packages are stopped sequentially (high to low)
+%% Service stop
+%% - Services are stopped sequentially (high to low)
 
 
 -module(nkserver_srv).
@@ -44,9 +44,9 @@
 
 -export([start_link/1, replace/2, get_status/1]).
 -export([get_local_all/0, get_local_all/1, get_all_status/0, get_all_status/1]).
--export([stop_local_all/0, stop_local_all/1, get_package/1]).
+-export([stop_local_all/0, stop_local_all/1, get_service/1]).
 -export([call/2, call/3, cast/2]).
--export([get_package_childs/1, recompile/1]).
+-export([get_service_childs/1, recompile/1]).
 -export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2,
          handle_info/2]).
 
@@ -54,8 +54,8 @@
 
 -define(SRV_CHECK_TIME, 5000).
 
--define(SRV_LOG(Type, Txt, Args, State),
-    lager:Type("NkSERVER '~s' (~s) "++Txt, [State#state.id, State#state.class | Args])).
+-define(LLOG(Type, Txt, Args, State),
+    lager:Type("NkSERVER srv '~s' (~s) "++Txt, [State#state.id, State#state.class | Args])).
 
 
 %% ===================================================================
@@ -67,7 +67,7 @@
 
 -type status() :: starting | running | updating | failed.
 
--type package_status() ::
+-type service_status() ::
     #{
         id => nkserver:id(),
         class => nkserver:class(),
@@ -87,56 +87,56 @@
 %% ===================================================================
 
 %% @doc
-start_link(#{id:=PkgId}=Package) ->
-    gen_server:start_link({local, PkgId}, ?MODULE, Package, []).
+start_link(#{id:=SrvId}=Service) ->
+    gen_server:start_link({local, SrvId}, ?MODULE, Service, []).
 
 
 %% @doc Replaces a service configuration in local node
 -spec replace(id(), nkserver:spec()) ->
     ok | {error, term()}.
 
-replace(PkgId, Spec) ->
-    call(PkgId, {nkserver_replace, Spec}, 30000).
+replace(SrvId, Spec) ->
+    call(SrvId, {nkserver_replace, Spec}, 30000).
 
 
 %% @doc
 -spec get_status(id()) ->
-    {ok, package_status()} | {error, term()}.
+    {ok, service_status()} | {error, term()}.
 
-get_status(PkgId) ->
-    call(PkgId, nkserver_get_status).
+get_status(SrvId) ->
+    call(SrvId, nkserver_get_status).
 
 
 %% @doc
--spec get_package(id()) ->
-    {ok, nkserver:package()} | {error, term()}.
+-spec get_service(id()) ->
+    {ok, nkserver:service()} | {error, term()}.
 
-get_package(PkgId) ->
-    call(PkgId, nkserver_get_package).
+get_service(SrvId) ->
+    call(SrvId, nkserver_get_service).
 
 
 %% @doc Synchronous call to the service's gen_server process
 -spec call(nkserver:id(), term()) ->
     term().
 
-call(PkgId, Term) ->
-    call(PkgId, Term, 5000).
+call(SrvId, Term) ->
+    call(SrvId, Term, 5000).
 
 
 %% @doc Synchronous call to the service's gen_server process with a timeout
 -spec call(nkserver:id()|pid(), term(), pos_integer()|infinity|default) ->
     term().
 
-call(PkgId, Term, Time) ->
-    nklib_util:call(PkgId, Term, Time).
+call(SrvId, Term, Time) ->
+    nklib_util:call(SrvId, Term, Time).
 
 
 %% @doc Asynchronous call to the service's gen_server process
 -spec cast(nkserver:id()|pid(), term()) ->
     term().
 
-cast(PkgId, Term) ->
-    gen_server:cast(PkgId, Term).
+cast(SrvId, Term) ->
+    gen_server:cast(SrvId, Term).
 
 
 %% @doc Gets all started services
@@ -144,8 +144,8 @@ cast(PkgId, Term) ->
     [{id(), nkserver:class(), integer(), pid()}].
 
 get_local_all() ->
-    [{PkgId, Class, Hash, Pid} ||
-        {{PkgId, Class, Hash}, Pid} <- nklib_proc:values(nkserver_srv)].
+    [{SrvId, Class, Hash, Pid} ||
+        {{SrvId, Class, Hash}, Pid} <- nklib_proc:values(nkserver_srv)].
 
 
 %% @doc Gets all started services
@@ -154,7 +154,7 @@ get_local_all() ->
 
 get_local_all(Class) ->
     Class2 = nklib_util:to_binary(Class),
-    [{PkgId, Pid} || {PkgId, C, _H, Pid} <- get_local_all(), C==Class2].
+    [{SrvId, Pid} || {SrvId, C, _H, Pid} <- get_local_all(), C==Class2].
 
 
 %% @doc Gets all instances in all nodes
@@ -181,8 +181,8 @@ get_all_status(Class) ->
     ok.
 
 stop_local_all() ->
-    PkgIds = [PkgId || {PkgId, _Class, _Hash, _Pid} <- get_local_all()],
-    lists:foreach(fun(PkgId) -> nksip:stop(PkgId) end, PkgIds).
+    SrvIds = [SrvId || {SrvId, _Class, _Hash, _Pid} <- get_local_all()],
+    lists:foreach(fun(SrvId) -> nksip:stop(SrvId) end, SrvIds).
 
 
 %% @doc Gets all started services
@@ -190,13 +190,13 @@ stop_local_all() ->
     ok.
 
 stop_local_all(Class) ->
-    PkgIds = [PkgId || {PkgId, _Pid} <- get_local_all(Class)],
-    lists:foreach(fun(PkgId) -> nksip:stop(PkgId) end, PkgIds).
+    SrvIds = [SrvId || {SrvId, _Pid} <- get_local_all(Class)],
+    lists:foreach(fun(SrvId) -> nksip:stop(SrvId) end, SrvIds).
 
 
 %% @private
-get_package_childs(PkgId) ->
-    nkserver_workers_sup:get_childs(PkgId).
+get_service_childs(SrvId) ->
+    nkserver_workers_sup:get_childs(SrvId).
 
 
 %% @private
@@ -213,8 +213,8 @@ recompile(Pid) ->
 -record(state, {
     id :: nkserver:id(),
     class :: nkserver:class(),
-    package :: nkserver:package(),
-    package_status :: package_status(),
+    service :: nkserver:service(),
+    service_status :: service_status(),
     worker_sup_pid :: pid(),
     user :: map()
 }).
@@ -222,27 +222,27 @@ recompile(Pid) ->
 
 
 %% @private
-init(#{id:=PkgId, class:=Class}=Package) ->
+init(#{id:=SrvId, class:=Class}=Service) ->
     process_flag(trap_exit, true),          % Allow receiving terminate/2
-    init_package_srv(Package),
-    {ok, UserState} = ?CALL_PKG(PkgId, package_srv_init, [Package, #{}]),
+    init_srv(Service),
+    {ok, UserState} = ?CALL_SRV(SrvId, srv_init, [Service, #{}]),
     State1 = #state{
-        id = PkgId,
+        id = SrvId,
         class = Class,
-        package_status = #{
+        service_status = #{
             status => init,
             last_status_time => nklib_date:epoch(msecs)
         },
-        package = Package,
+        service = Service,
         user = UserState
     },
     State2 = set_workers_supervisor(State1),
     self() ! nkserver_timed_check_status,
     pg2:create(?MODULE),
     pg2:join(?MODULE, self()),
-    pg2:create({?MODULE, PkgId}),
-    pg2:join({?MODULE, PkgId}, self()),
-    ?SRV_LOG(notice, "package server started (~p, ~p)",
+    pg2:create({?MODULE, SrvId}),
+    pg2:join({?MODULE, SrvId}, self()),
+    ?LLOG(notice, "service server started (~p, ~p)",
              [State2#state.worker_sup_pid, self()], State2),
     {ok, State2}.
 
@@ -260,16 +260,16 @@ handle_call({nkserver_replace, Opts}, _From, State) ->
             {reply, {error, Error}, State2}
     end;
 
-handle_call(nkserver_get_package, _From, #state{package=Package}=State) ->
-    {reply, {ok, Package}, State};
+handle_call(nkserver_get_service, _From, #state{service =Service}=State) ->
+    {reply, {ok, Service}, State};
 
 handle_call(nkserver_state, _From, State) ->
     {reply, State, State};
 
 handle_call(Msg, From, State) ->
-    case handle(package_srv_handle_call, [Msg, From], State) of
+    case handle(srv_handle_call, [Msg, From], State) of
         continue ->
-            ?SRV_LOG(error, "received unexpected call ~p", [Msg], State),
+            ?LLOG(error, "received unexpected call ~p", [Msg], State),
             {noreply, State};
         Other ->
             Other
@@ -278,20 +278,20 @@ handle_call(Msg, From, State) ->
 
 %% @private
 handle_cast(nkserver_check_status, State)->
-    {noreply, check_package_state(State)};
+    {noreply, check_service_state(State)};
 
 handle_cast(nkserver_stop, State)->
     % Will restart everything
     {stop, normal, State};
 
-handle_cast(nkserver_recompile, #state{package = Package}=State)->
-    nkserver_dispatcher:compile(Package),
+handle_cast(nkserver_recompile, #state{service = Service}=State)->
+    nkserver_dispatcher:compile(Service),
     {noreply, State};
 
 handle_cast(Msg, State) ->
-    case handle(package_srv_handle_cast, [Msg], State) of
+    case handle(srv_handle_cast, [Msg], State) of
         continue ->
-            ?SRV_LOG(error, "received unexpected cast ~p", [Msg], State),
+            ?LLOG(error, "received unexpected cast ~p", [Msg], State),
             {noreply, State};
         Other ->
             Other
@@ -300,27 +300,27 @@ handle_cast(Msg, State) ->
 
 %% @private
 handle_info(nkserver_timed_check_status, State) ->
-    State2 = check_package_state(State),
-    State3 = case catch handle(package_srv_timed_check, [], State2) of
+    State2 = check_service_state(State),
+    State3 = case catch handle(srv_timed_check, [], State2) of
         {ok, TimedState} ->
             TimedState;
         {'EXIT', Error} ->
-            ?SRV_LOG(warning, "could not call package_srv_timed_check: ~p", [Error], State2),
+            ?LLOG(warning, "could not call srv_timed_check: ~p", [Error], State2),
             State2
     end,
     erlang:send_after(?SRV_CHECK_TIME, self(), nkserver_timed_check_status),
     {noreply, State3};
 
 handle_info({'DOWN', _Ref, process, Pid, Reason}, #state{worker_sup_pid =Pid}=State) ->
-    ?SRV_LOG(warning, "package supervisor has failed!: ~p", [Reason], State),
+    ?LLOG(warning, "service supervisor has failed!: ~p", [Reason], State),
     State2 = set_workers_supervisor(State),
     State3 = update_status({error, supervisor_failed}, State2),
     {noreply, State3};
 
 handle_info(Msg, State) ->
-    case handle(package_srv_handle_info, [Msg], State) of
+    case handle(srv_handle_info, [Msg], State) of
         continue ->
-            ?SRV_LOG(notice, "received unexpected info ~p", [Msg], State),
+            ?LLOG(notice, "received unexpected info ~p", [Msg], State),
             {noreply, State};
         Other ->
             Other
@@ -328,8 +328,8 @@ handle_info(Msg, State) ->
 
 
 %% @private
-code_change(OldVsn, #state{id=PkgId, user=UserState}=State, Extra) ->
-    case apply(PkgId, package_srv_code_change, [OldVsn, UserState, Extra]) of
+code_change(OldVsn, #state{id=SrvId, user=UserState}=State, Extra) ->
+    case apply(SrvId, srv_code_change, [OldVsn, UserState, Extra]) of
         {ok, UserState2} ->
             {ok, State#state{user=UserState2}};
         {error, Error} ->
@@ -339,10 +339,10 @@ code_change(OldVsn, #state{id=PkgId, user=UserState}=State, Extra) ->
 
 %% @private
 terminate(Reason, State) ->
-    ?SRV_LOG(debug, "is stopping (~p)", [Reason], State),
+    ?LLOG(debug, "is stopping (~p)", [Reason], State),
     do_stop_plugins(State),
-    ?SRV_LOG(info, "is stopped (~p)", [Reason], State),
-    catch handle(package_srv_terminate, [Reason], State).
+    ?LLOG(info, "is stopped (~p)", [Reason], State),
+    catch handle(srv_terminate, [Reason], State).
 
 
 
@@ -351,12 +351,12 @@ terminate(Reason, State) ->
 %% ===================================================================
 
 %% @private
-init_package_srv(Package) ->
-    #{id:=PkgId, class:=Class, hash:=Hash} = Package,
-    nklib_proc:put(?MODULE, {PkgId, Class, Hash}),
-    nklib_proc:put({?MODULE, PkgId}, {Class, Hash}),
-    nkserver_dispatcher:compile(Package),
-    nkserver_util:notify_updated_service(PkgId).
+init_srv(Service) ->
+    #{id:=SrvId, class:=Class, hash:=Hash} = Service,
+    nklib_proc:put(?MODULE, {SrvId, Class, Hash}),
+    nklib_proc:put({?MODULE, SrvId}, {Class, Hash}),
+    nkserver_dispatcher:compile(Service),
+    nkserver_util:notify_updated_service(SrvId).
 
 
 %% @private
@@ -367,24 +367,24 @@ set_workers_supervisor(State) ->
 
 
 %% @private
-wait_for_supervisor(Tries, #state{id=PkgId}=State) when Tries > 0 ->
-    case nkserver_workers_sup:get_pid(PkgId) of
+wait_for_supervisor(Tries, #state{id=SrvId}=State) when Tries > 0 ->
+    case nkserver_workers_sup:get_pid(SrvId) of
         SupPid when is_pid(SupPid) ->
             SupPid;
         undefined ->
-            ?SRV_LOG(notice, "waiting for supervisor (~p tries left)", [Tries], State),
+            ?LLOG(notice, "waiting for supervisor (~p tries left)", [Tries], State),
 
             timer:sleep(100),
             wait_for_supervisor(Tries-1, State)
     end;
 
 wait_for_supervisor(_Tries, State) ->
-    ?SRV_LOG(error, "could not start supervisor", [], State),
+    ?LLOG(error, "could not start supervisor", [], State),
     error(could_not_find_supervidor).
 
 
-%% @private Packages will be checked from low to high
-check_package_state(#state{package_status=PkgStatus}=State) ->
+%% @private Services will be checked from low to high
+check_service_state(#state{service_status =PkgStatus}=State) ->
     case maps:get(status, PkgStatus) of
         init ->
             do_start_plugins(State);
@@ -398,14 +398,14 @@ check_package_state(#state{package_status=PkgStatus}=State) ->
 %% @private
 do_get_status(State) ->
     #state{
-        id = PkgId,
+        id = SrvId,
         class = Class,
-        package_status = PkgStatus,
-        package = Package
+        service_status = PkgStatus,
+        service = Service
     } = State,
-    #{hash:=Hash} = Package,
+    #{hash:=Hash} = Service,
     PkgStatus#{
-        id => PkgId,
+        id => SrvId,
         class => Class,
         pid => self(),
         hash => Hash
@@ -414,8 +414,8 @@ do_get_status(State) ->
 
 %% @private
 %% Will call the service's functions
-handle(Fun, Args, #state{id=PkgId, package=Package, user=UserState}=State) ->
-    case ?CALL_PKG(PkgId, Fun, Args++[Package, UserState]) of
+handle(Fun, Args, #state{id=SrvId, service =Service, user=UserState}=State) ->
+    case ?CALL_SRV(SrvId, Fun, Args++[Service, UserState]) of
         {reply, Reply, UserState2} ->
             {reply, Reply, State#state{user=UserState2}};
         {reply, Reply, UserState2, Time} ->
@@ -433,15 +433,15 @@ handle(Fun, Args, #state{id=PkgId, package=Package, user=UserState}=State) ->
         continue ->
             continue;
         Other ->
-            ?SRV_LOG(warning, "invalid response for ~p(~p): ~p", [Fun, Args, Other], State),
+            ?LLOG(warning, "invalid response for ~p(~p): ~p", [Fun, Args, Other], State),
             error(invalid_handle_response)
     end.
 
 
 %% @private
-do_start_plugins(#state{package=Package}=State) ->
-    ?SRV_LOG(debug, "starting package plugins", [], State),
-    #{expanded_plugins:=Plugins} = Package,
+do_start_plugins(#state{service =Service}=State) ->
+    ?LLOG(debug, "starting service plugins", [], State),
+    #{expanded_plugins:=Plugins} = Service,
     case do_start_plugins(Plugins, State) of
         ok ->
             update_status(running, State);
@@ -459,12 +459,12 @@ do_start_plugins([Id|Rest], #state{id=Id}=State) ->
     do_start_plugins(Rest, State);
 
 do_start_plugins([Plugin|Rest], State) ->
-    #state{id=PkgId, class=Class, package=Package} = State,
-    #{config:=Config} = Package,
+    #state{id=SrvId, service =Service} = State,
+    #{config:=Config} = Service,
     Mod = nkserver_config:get_plugin_mod(Plugin),
     % Bottom to top
-    ?SRV_LOG(debug, "calling start plugin for ~s (~s)", [Plugin, Mod], State),
-    case nklib_util:apply(Mod, plugin_start, [PkgId, Class, Config, Package]) of
+    ?LLOG(debug, "calling start plugin for ~s (~s)", [Plugin, Mod], State),
+    case nklib_util:apply(Mod, plugin_start, [SrvId, Config, Service]) of
         ok ->
             do_start_plugins(Rest, State);
         not_exported ->
@@ -472,15 +472,15 @@ do_start_plugins([Plugin|Rest], State) ->
         continue ->
             do_start_plugins(Rest, State);
         {error, Error} ->
-            ?SRV_LOG(warning, "error starting plugin ~s package: ~p", [Mod, Error], State),
+            ?LLOG(warning, "error starting plugin ~s service: ~p", [Mod, Error], State),
             {error, Error}
     end.
 
 
 %% @private
-do_stop_plugins(#state{package=Package}=State) ->
-    ?SRV_LOG(debug, "stopping package plugins", [], State),
-    #{expanded_plugins:=Plugins} = Package,
+do_stop_plugins(#state{service =Service}=State) ->
+    ?LLOG(debug, "stopping service plugins", [], State),
+    #{expanded_plugins:=Plugins} = Service,
     do_stop_plugins(lists:reverse(Plugins), State).
 
 
@@ -492,13 +492,13 @@ do_stop_plugins([Id|Rest], #state{id=Id}=State) ->
     do_stop_plugins(Rest, State);
 
 do_stop_plugins([Plugin|Rest], State) ->
-    #state{id=PkgId, class=Class, package=Package} = State,
-    #{config:=Config} = Package,
+    #state{id=SrvId, service =Service} = State,
+    #{config:=Config} = Service,
     Mod = nkserver_config:get_plugin_mod(Plugin),
-    ?SRV_LOG(debug, "calling stop plugin for ~s (~s)", [Plugin, Mod], State),
-    case nklib_util:apply(Mod, plugin_stop, [PkgId, Class, Config, Package]) of
+    ?LLOG(debug, "calling stop plugin for ~s (~s)", [Plugin, Mod], State),
+    case nklib_util:apply(Mod, plugin_stop, [SrvId, Config, Service]) of
         {error, Error} ->
-            ?SRV_LOG(info, "error stopping plugin ~s package: ~p", [Mod, Error], State);
+            ?LLOG(info, "error stopping plugin ~s service: ~p", [Mod, Error], State);
         _ ->
             ok
     end,
@@ -506,19 +506,19 @@ do_stop_plugins([Plugin|Rest], State) ->
 
 
 %% @private
-do_update(Opts, #state{id=PkgId, class=Class, package=Package}=State) ->
-    #{class:=Class, hash:=OldHash} = Package,
-    case nkserver_util:get_spec(PkgId, Class, Opts) of
+do_update(Opts, #state{id=SrvId, class=Class, service =Service}=State) ->
+    #{class:=Class, hash:=OldHash} = Service,
+    case nkserver_util:get_spec(SrvId, Class, Opts) of
         {ok, Spec} ->
-            case nkserver_config:config(Spec, Package) of
+            case nkserver_config:config(Spec, Service) of
                 {ok, #{hash:=OldHash}} ->
                     % Nothing has changed
                     {ok, State};
-                {ok, NewPackage} ->
-                    case do_update_plugins(NewPackage, State) of
+                {ok, NewService} ->
+                    case do_update_plugins(NewService, State) of
                         ok ->
-                            init_package_srv(NewPackage),
-                            State2 = State#state{package = NewPackage},
+                            init_srv(NewService),
+                            State2 = State#state{service = NewService},
                             State3 = update_status(running, State2),
                             {ok, State3};
                         {error, Error} ->
@@ -533,16 +533,16 @@ do_update(Opts, #state{id=PkgId, class=Class, package=Package}=State) ->
 
 
 %% @private
-do_update_plugins(NewPackage, #state{id=PkgId, class=Class, package=OldPackage}=State) ->
-    #{id:=PkgId, class:=Class, expanded_plugins:=NewPlugins} = NewPackage,
-    #{id:=PkgId, class:=Class, expanded_plugins:=OldPlugins} = OldPackage,
+do_update_plugins(NewService, #state{id=SrvId, class=Class, service =OldService}=State) ->
+    #{id:=SrvId, class:=Class, expanded_plugins:=NewPlugins} = NewService,
+    #{id:=SrvId, class:=Class, expanded_plugins:=OldPlugins} = OldService,
     ToStop = OldPlugins -- NewPlugins,
     ToStart = NewPlugins -- OldPlugins,
     ToUpdate = OldPlugins -- ToStop -- ToStart,
-    ?PKG_LOG(info, "updating package (start:~p, stop:~p, update:~p",
-        [ToStart, ToStop, ToUpdate], OldPackage),
+    ?SRV_LOG(info, "updating service (start:~p, stop:~p, update:~p",
+        [ToStart, ToStop, ToUpdate], OldService),
     do_stop_plugins(ToStop, State),
-    case do_update_plugins(ToUpdate, NewPackage, State) of
+    case do_update_plugins(ToUpdate, NewService, State) of
         ok ->
             case do_start_plugins(ToStart, State) of
                 ok ->
@@ -558,57 +558,57 @@ do_update_plugins(NewPackage, #state{id=PkgId, class=Class, package=OldPackage}=
 
 
 %% @private
-do_update_plugins([], _NewPackage, _State) ->
+do_update_plugins([], _NewService, _State) ->
     ok;
 
-do_update_plugins([Id|Rest], NewPackage, #state{id=Id}=State) ->
-    do_update_plugins(Rest, NewPackage, State);
+do_update_plugins([Id|Rest], NewService, #state{id=Id}=State) ->
+    do_update_plugins(Rest, NewService, State);
 
-do_update_plugins([Plugin|Rest], NewPackage, State) ->
-    #state{id=PkgId, class=Class, package=Package} = State,
+do_update_plugins([Plugin|Rest], NewService, State) ->
+    #state{id=SrvId, service =Service} = State,
     Mod = nkserver_config:get_plugin_mod(Plugin),
-    #{config:=NewConfig} = NewPackage,
-    #{config:=OldConfig} = Package,
-    Args = [PkgId, Class, NewConfig, OldConfig, NewPackage],
-    ?SRV_LOG(debug, "calling update plugin for ~s (~s)", [Plugin, Mod], State),
+    #{config:=NewConfig} = NewService,
+    #{config:=OldConfig} = Service,
+    Args = [SrvId, NewConfig, OldConfig, NewService],
+    ?LLOG(debug, "calling update plugin for ~s (~s)", [Plugin, Mod], State),
     case nklib_util:apply(Mod, plugin_update, Args) of
         ok ->
-            do_update_plugins(Rest, NewPackage, State);
+            do_update_plugins(Rest, NewService, State);
         not_exported ->
-            do_update_plugins(Rest, NewPackage, State);
+            do_update_plugins(Rest, NewService, State);
         continue ->
-            do_update_plugins(Rest, NewPackage, State);
+            do_update_plugins(Rest, NewService, State);
         {error, Error} ->
-            ?SRV_LOG(warning, "error updating plugin ~s package: ~p", [Mod, Error], State),
+            ?LLOG(warning, "error updating plugin ~s service: ~p", [Mod, Error], State),
             {error, Error}
     end.
 
 
 %% @private
-update_status({error, Error}, #state{package_status=PkgStatus}=State) ->
+update_status({error, Error}, #state{service_status =PkgStatus}=State) ->
     Now = nklib_date:epoch(msecs),
-    ?SRV_LOG(notice, "package status 'failed': ~p", [Error], State),
+    ?LLOG(notice, "service status 'failed': ~p", [Error], State),
     PkgStatus2 = PkgStatus#{
         status => failed,
         last_error => Error,
         last_error_time => Now,
         last_status_time => Now
     },
-    State#state{package_status = PkgStatus2};
+    State#state{service_status = PkgStatus2};
 
-update_status(Status, #state{package_status=PkgStatus}=State) ->
+update_status(Status, #state{service_status =PkgStatus}=State) ->
     case maps:get(status, PkgStatus) of
         Status ->
             State;
         OldStatus ->
             Now = nklib_date:epoch(msecs),
-            ?SRV_LOG(notice, "package status updated '~s' -> '~s'",
+            ?LLOG(notice, "service status updated '~s' -> '~s'",
                      [OldStatus, Status], State),
             PkgStatus2 = PkgStatus#{
                 status => Status,
                 last_status_time => Now
             },
-            State#state{package_status = PkgStatus2}
+            State#state{service_status = PkgStatus2}
     end.
 
 
