@@ -25,7 +25,7 @@
 -export([update/2, replace/2]).
 -export([get_all_status/0, get_all_status/1]).
 -export([get_plugin_config/3, get/2, get/3, put/3, put_new/3, del/2]).
--export([uuid/1]).
+-export([get_config/1, get_plugins/1, get_uuid/1]).
 -export_type([id/0, class/0, spec/0, service/0]).
 
 
@@ -96,7 +96,7 @@ get_sup_spec(PkgClass, SrvId, Spec) ->
     ok | {error, term()}.
 
 update(SrvId, Spec) ->
-    OldConfig = ?CALL_SRV(SrvId, config, []),
+    OldConfig = nkserver:get_config(SrvId),
     Spec2 = maps:merge(OldConfig, Spec),
     replace(SrvId, Spec2).
 
@@ -170,5 +170,17 @@ del(SrvId, Key) ->
     ok.
 
 
-uuid(SrvId) ->
-    ?CALL_SRV(SrvId, uuid, []).
+%% @private
+get_config(SrvId) ->
+   ?CALL_SRV(SrvId, config, []).
+
+
+%% @private
+get_plugins(SrvId) ->
+    ?CALL_SRV(SrvId, plugins, []).
+
+
+%% @private
+get_uuid(SrvId) ->
+    nkserver:get_uuid(SrvId).
+
