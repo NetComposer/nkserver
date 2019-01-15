@@ -73,18 +73,18 @@
 -spec start_link(class(), id(), spec()) ->
     {ok, pid()} | {error, term()}.
 
-start_link(PkgClass, SrvId, Spec) ->
-    nkserver_srv_sup:start_link(PkgClass, SrvId, Spec).
+start_link(PkgClass, SrvId, Spec) when is_atom(SrvId), is_map(Spec) ->
+    nkserver_srv_sup:start_link(nklib_util:to_binary(PkgClass), SrvId, Spec).
 
 
 %% @doc
 -spec get_sup_spec(class(), id(), spec()) ->
     {ok, pid()} | {error, term()}.
 
-get_sup_spec(PkgClass, SrvId, Spec) ->
+get_sup_spec(PkgClass, SrvId, Spec) when is_atom(SrvId), is_map(Spec) ->
     #{
         id => {nkserver, SrvId},
-        start => {?MODULE, start_link, [PkgClass, SrvId, Spec]},
+        start => {?MODULE, start_link, [nklib_util:to_binary(PkgClass), SrvId, Spec]},
         restart => permanent,
         shutdown => 15000,
         type => supervisor
