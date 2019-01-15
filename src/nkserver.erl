@@ -182,5 +182,5 @@ get_plugins(SrvId) ->
 
 %% @private
 get_uuid(SrvId) ->
-    nkserver:get_uuid(SrvId).
+    ?CALL_SRV(SrvId, uuid, []).
 
