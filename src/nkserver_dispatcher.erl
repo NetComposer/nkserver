@@ -73,12 +73,16 @@ parse_transform(Forms, _Opts) ->
 
 
 %% @doc Called to generate the dispatcher module
-compile(#{id:=Id}=Service) ->
-    maybe_generate_mod(Id),
-    {DispatcherMod, ModForms} = make_module(Service),
-    Opts = [report_errors, report_warnings],
-    {ok, _Tree} = nklib_code:do_compile(DispatcherMod, ModForms, Opts),
-    ok.
+compile(Service) ->
+    case maybe_generate_mod(Service) of
+        ok ->
+            {DispatcherMod, ModForms} = make_module(Service),
+            Opts = [report_errors, report_warnings],
+            {ok, _Tree} = nklib_code:do_compile(DispatcherMod, ModForms, Opts),
+            ok;
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc Called from function nkserver_on_load/0 in callback module
@@ -98,15 +102,55 @@ module_loaded(Id) ->
     end.
 
 
-
 %% @doc Generates a barebones callback module if it is doesn't exist
-maybe_generate_mod(Id) ->
-    code:ensure_loaded(Id),
+%% If the option 'callback_module' is used, all functions are copied from there,
+%% and inserted in compiled module 'Id'
+maybe_generate_mod(#{id:=Id, config:=#{callback_module:=Module}}) ->
+    {module, Module} = code:ensure_loaded(Module),
+    ModInfo = Module:module_info(),
+    ModExports1 = nklib_util:get_value(exports, ModInfo),
+    ModExports2 = nklib_util:remove_values([module_info, nkserver_dispatcher], ModExports1),
+    Exports = [{nkserver_dispatcher, 0} | ModExports2],
+    ModFuns = [
+        nklib_code:callback_expr(Module, Name, Arity)
+        || {Name, Arity} <- ModExports2
+    ],
+    Funs = [
+        erl_syntax:function(
+            erl_syntax:atom(nkserver_dispatcher), [
+                erl_syntax:clause(none, [
+                    erl_syntax:abstract(gen_dispatcher_mod(Id))
+                ])
+            ]
+        )
+        |
+        ModFuns
+    ],
+    Forms = lists:flatten([
+        erl_syntax:attribute(erl_syntax:atom(module), [erl_syntax:atom(Id)]),
+        nklib_code:export_attr(Exports),
+        Funs,
+        erl_syntax:eof_marker()
+    ]),
+    % nklib_code:forms_print(Forms),
+    Opts = [report_errors, report_warnings],
+    {ok, _} = nklib_code:do_compile(Id, Forms, Opts),
+    ok;
+
+maybe_generate_mod(#{id:=Id}) ->
+    Exists = case code:ensure_loaded(Id) of
+        {module, Id} -> true;
+        _ -> false
+    end,
     case erlang:function_exported(Id, nkserver_dispatcher, 0) of
         true ->
+            % Module has been compiled with parse_transform
             ok;
+        false when Exists ->
+            % Module exists, but has not been compiled with parse transform
+            {error, {invalid_callback_module, Id}};
         false ->
-            Forms = [
+            Forms = lists:flatten([
                 erl_syntax:attribute(erl_syntax:atom(module), [erl_syntax:atom(Id)]),
                 nklib_code:export_attr([{nkserver_dispatcher, 0}]),
                 erl_syntax:function(
@@ -117,11 +161,11 @@ maybe_generate_mod(Id) ->
                     ]
                 ),
                 erl_syntax:eof_marker()
-            ],
+            ]),
             Opts = [report_errors, report_warnings],
-            {ok, _} = nklib_code:do_compile(Id, Forms, Opts)
+            {ok, _} = nklib_code:do_compile(Id, Forms, Opts),
+            ok
     end.
-
 
 
 %% @private
@@ -177,7 +221,8 @@ make_plugin_funs([Plugin|Rest], Id, Map) ->
                     make_plugin_funs(Rest, Id, Map);
                 List ->
                     % List of {Name, Arity} defined for this module
-                    Map2 = make_plugin_funs_deep(List, Mod, Map),
+                    List2 = nklib_util:remove_values([nkserver_dispatcher], List),
+                    Map2 = make_plugin_funs_deep(List2, Mod, Map),
                     make_plugin_funs(Rest, Id, Map2)
             end
     end;
@@ -243,124 +288,4 @@ make_module(Id, Exported, Funs) ->
 
 %% @private
 gen_dispatcher_mod(Id) -> list_to_atom(atom_to_list(Id)++"_nkserver_dispatcher").
-
-
-%%%% @doc Called to generate the dispatcher module
-%%compile(#{id:=Id}=Service) ->
-%%    ModForms1 = get_ebin_forms(Id),
-%%    ModForms2 = make_module(Service, ModForms1),
-%%    ok = nklib_store:put({nkserver_in_compile, Id}, true, [{ttl, 5}]),
-%%    % We include debug_info here because it seems c() in the sell will somehow
-%%    % take these settings. If not, c() will remove the debug_info from beam
-%%    {ok, _Tree} = nklib_code:do_compile(Id, ModForms2,
-%%        [report_errors, report_warnings, debug_info]),
-%%    nklib_store:del({nkserver_in_compile, Id}),
-%%    ok.
-%%
-%%
-%%
-%%%%%% @doc Called from function nkserver_on_load/0 in callback module
-%%%%%% - if no package is running, ignore and load the module
-%%%%%% - if it is running, and the reload is not because of our recompilation
-%%%%%%   we abort the loading and recompile ourselves
-%%%%%% - if it is running, but the reload is from our our recompilation
-%%%%%%   (we took all attributes from original module, including on_load)
-%%module_loaded(Id) ->
-%%    lager:error("NKLOG MODULE LOADED ~p", [Id]),
-%%    case whereis(Id) of
-%%        Pid when is_pid(Pid) ->
-%%            % The package is active
-%%            case nklib_store:get({nkserver_in_compile, Id}) of
-%%                true ->
-%%                    % The load event is because of our compilation, so proceed
-%%                    lager:info("NkSERVER: completing reloading of ~s", [Id]),
-%%                    nklib_store:del({nkserver_in_compile, Id}),
-%%                    ok;
-%%                _ ->
-%%                    % It is an external reloading
-%%                    % Abort it and perform a code compilation
-%%                    lager:notice("NkSERVER: Module ~s has been reloaded, recompiling", [Id]),
-%%                    nkserver_srv:recompile(Pid),
-%%                    error
-%%            end;
-%%        undefined ->
-%%            io:format("\n\n\nNkSERVER: Ignoring reloading of inactive ~s\n\n\n", [Id]),
-%%            ok
-%%    end.
-%%
-%%
-%%%% @private
-%%make_module(#{id:=Id}=Service, ModForms) ->
-%%    ?SRV_LOG(debug, "starting dispatcher recompilation...", [], Service),
-%%    {ExternalFuns, InternalFuns} = find_module_funs(ModForms),
-%%    ExternalFuns2 = rename_external_funs(ExternalFuns),
-%%    ServiceKeys = [id, class, uuid, hash, timestamp, plugins, expanded_plugins, config_cache],
-%%    {ServiceExported, ServiceFuns} = make_package_funs(ServiceKeys, Service),
-%%    PluginList = maps:get(expanded_plugins, Service),
-%%    ExternalExported = [{Name, Arity} || {function, _, Name, Arity, _} <- ExternalFuns],
-%%    {PluginExported, PluginFuns} = make_plugin_funs(PluginList, Id, ExternalExported),
-%%    {CacheExported, CacheFuns} = make_cache_funs(Service),
-%%    AllFuns = InternalFuns ++ ExternalFuns2 ++ ServiceFuns ++ PluginFuns ++ CacheFuns,
-%%    AllExported = ServiceExported ++ PluginExported ++ CacheExported,
-%%    ModForms2 = make_module(Id, AllExported, AllFuns, ModForms),
-%%    case nkserver_app:get(saveDispatcherSource) of
-%%        true ->
-%%            LogPath = nkserver_app:get(logPath),
-%%            ?SRV_LOG(debug, "saving to disk...", [], Service),
-%%            ok = nklib_code:write(nklib_util:to_list(Id) ++ "_compiled", ModForms2, LogPath);
-%%        false ->
-%%            ok
-%%    end,
-%%    ?SRV_LOG(info, "dispatcher compilation completed", [], Service),
-%%    ModForms2.
-
-
-
-%%%% @doc Finds external and local functions in module
-%%get_ebin_forms(Id) ->
-%%    code:ensure_loaded(Id),
-%%    case code:get_object_code(Id) of
-%%        {Id, Bin, _File} ->
-%%            {ok,{_,[{abstract_code,{_, Forms}}]}} = beam_lib:chunks(Bin, [abstract_code]),
-%%            Forms;
-%%        error ->
-%%            []
-%%    end.
-%%
-%%
-%%%% @doc Finds external and local functions in module
-%%find_module_funs(Forms) ->
-%%    Exported = nklib_code:forms_find_exported(Forms),
-%%    find_used(Forms, Exported, [], []).
-%%
-%%
-%%%% @private
-%%find_used([], _Exported, ExtAcc, IntAcc) ->
-%%    {ExtAcc, IntAcc};
-%%
-%%find_used([{function, _Line, Name, Arity, _Spec}=Fun|Rest], Exported, ExtAcc, IntAcc) ->
-%%    case lists:member({Name, Arity}, Exported) of
-%%        true ->
-%%            find_used(Rest, Exported, [Fun|ExtAcc], IntAcc);
-%%        false ->
-%%            find_used(Rest, Exported, ExtAcc, [Fun|IntAcc])
-%%    end;
-%%
-%%find_used([_|Rest], Exported, ExtAcc, IntAcc) ->
-%%    find_used(Rest, Exported, ExtAcc, IntAcc).
-%% @private Rename all external functions in module as "fun_"
-%% The plugin mechanism will generate new external functions with the same name,
-%% calling to this internal ones.
-
-
-%%rename_external_funs(ExternalFuns) ->
-%%    [
-%%        {function, Line, gen_local_name(Name), Arity, Spec}
-%%        || {function, Line, Name, Arity, Spec} <- ExternalFuns
-%%    ].
-
-
-%%%% @private
-%%gen_local_name(Fun) -> list_to_atom(atom_to_list(Fun)++"_").
-
 

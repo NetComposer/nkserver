@@ -224,27 +224,31 @@ recompile(Pid) ->
 %% @private
 init(#{id:=SrvId, class:=Class}=Service) ->
     process_flag(trap_exit, true),          % Allow receiving terminate/2
-    init_srv(Service),
-    {ok, UserState} = ?CALL_SRV(SrvId, srv_init, [Service, #{}]),
-    State1 = #state{
-        id = SrvId,
-        class = Class,
-        service_status = #{
-            status => init,
-            last_status_time => nklib_date:epoch(msecs)
-        },
-        service = Service,
-        user = UserState
-    },
-    State2 = set_workers_supervisor(State1),
-    self() ! nkserver_timed_check_status,
-    pg2:create(?MODULE),
-    pg2:join(?MODULE, self()),
-    pg2:create({?MODULE, SrvId}),
-    pg2:join({?MODULE, SrvId}, self()),
-    ?LLOG(notice, "service server started (~p, ~p)",
-             [State2#state.worker_sup_pid, self()], State2),
-    {ok, State2}.
+    case init_srv(Service) of
+        ok ->
+            {ok, UserState} = ?CALL_SRV(SrvId, srv_init, [Service, #{}]),
+            State1 = #state{
+                id = SrvId,
+                class = Class,
+                service_status = #{
+                    status => init,
+                    last_status_time => nklib_date:epoch(msecs)
+                },
+                service = Service,
+                user = UserState
+            },
+            State2 = set_workers_supervisor(State1),
+            self() ! nkserver_timed_check_status,
+            pg2:create(?MODULE),
+            pg2:join(?MODULE, self()),
+            pg2:create({?MODULE, SrvId}),
+            pg2:join({?MODULE, SrvId}, self()),
+            ?LLOG(notice, "service server started (~p, ~p)",
+                     [State2#state.worker_sup_pid, self()], State2),
+            {ok, State2};
+        {error, Error} ->
+            {stop, Error}
+    end.
 
 
 %% @private
@@ -285,7 +289,7 @@ handle_cast(nkserver_stop, State)->
     {stop, normal, State};
 
 handle_cast(nkserver_recompile, #state{service = Service}=State)->
-    nkserver_dispatcher:compile(Service),
+    ok = nkserver_dispatcher:compile(Service),
     {noreply, State};
 
 handle_cast(Msg, State) ->
@@ -355,8 +359,7 @@ init_srv(Service) ->
     #{id:=SrvId, class:=Class, hash:=Hash} = Service,
     nklib_proc:put(?MODULE, {SrvId, Class, Hash}),
     nklib_proc:put({?MODULE, SrvId}, {Class, Hash}),
-    nkserver_dispatcher:compile(Service),
-    nkserver_util:notify_updated_service(SrvId).
+    nkserver_dispatcher:compile(Service).
 
 
 %% @private
