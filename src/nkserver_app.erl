@@ -78,6 +78,8 @@ start(_Type, _Args) ->
             CallbacksHttpUrl = get(callbacksHttpUrl),
             put(callbacksHttpUrl, nklib_url:norm(CallbacksHttpUrl)),
             lager:info("NkSERVER v~s has started.", [Vsn]),
+            % Dummy package for tests
+            nkserver_util:register_package_class(<<"Service">>, nkserver),
             ?MODULE:put(nkserver_start_time, nklib_util:l_timestamp()),
             {ok, Pid};
         {error, Error} ->
