@@ -27,6 +27,7 @@
 -export([register_for_changes/1, notify_updated_service/1]).
 -export([get_net_ticktime/0, set_net_ticktime/2]).
 -export([get_spec/3]).
+-export([handle_user_call/5]).
 
 -include("nkserver.hrl").
 
@@ -159,6 +160,42 @@ get_net_ticktime() ->
 %% @private
 set_net_ticktime(Time, Period) ->
     rpc:multicall(net_kernel, set_net_ticktime, [Time, Period]).
+
+
+%% @private
+%% Will call the service's functions
+handle_user_call(Fun, Args, State, PosSrvId, PosUserState) ->
+    SrvId = element(PosSrvId, State),
+    UserState = element(PosUserState, State),
+    Args2 = Args ++ [UserState],
+    case ?CALL_SRV(SrvId, Fun, Args2) of
+        {reply, Reply, UserState2} ->
+            State2 = setelement(PosUserState, State, UserState2),
+            {reply, Reply, State2};
+        {reply, Reply, UserState2, Time} ->
+            State2 = setelement(PosUserState, State, UserState2),
+            {reply, Reply, State2, Time};
+        {noreply, UserState2} ->
+            State2 = setelement(PosUserState, State, UserState2),
+            {noreply, State2};
+        {noreply, UserState2, Time} ->
+            State2 = setelement(PosUserState, State, UserState2),
+            {noreply, State2, Time};
+        {stop, Reason, Reply, UserState2} ->
+            State2 = setelement(PosUserState, State, UserState2),
+            {stop, Reason, Reply, State2};
+        {stop, Reason, UserState2} ->
+            State2 = setelement(PosUserState, State, UserState2),
+            {stop, Reason, State2};
+        {ok, UserState2} ->
+            State2 = setelement(PosUserState, State, UserState2),
+            {ok, State2};
+        continue ->
+            continue;
+        Other ->
+            lager:warning("invalid response for ~p:~p(~p): ~p", [SrvId, Fun, Args, Other]),
+            error(invalid_handle_response)
+    end.
 
 
 
