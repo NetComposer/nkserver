@@ -103,9 +103,9 @@ module_loaded(Id) ->
 
 
 %% @doc Generates a barebones callback module if it is doesn't exist
-%% If the option 'callback_module' is used, all functions are copied from there,
-%% and inserted in compiled module 'Id'
-maybe_generate_mod(#{id:=Id, config:=#{callback_module:=Module}}) ->
+%% If the option 'use_module' is used, module 'id' is ignored event if it exists,
+%% and a new one is compiled from scratch, copying functions from 'use_module'
+maybe_generate_mod(#{id:=Id, use_module:=Module}) ->
     {module, Module} = code:ensure_loaded(Module),
     ModInfo = Module:module_info(),
     ModExports1 = nklib_util:get_value(exports, ModInfo),

@@ -134,11 +134,12 @@ get_spec(SrvId, PkgClass, Opts) ->
     Syntax = #{
         uuid => binary,
         plugins => {list, atom},
+        use_module => module,
         '__allow_unknown' => true
     },
     case nklib_syntax:parse(Opts2, Syntax) of
         {ok, Opts3, _} ->
-            CoreOpts = [uuid, plugins],
+            CoreOpts = [uuid, plugins, use_module],
             Opts4 = maps:with(CoreOpts, Opts3),
             Config = maps:without(CoreOpts, Opts3),
             Spec = Opts4#{

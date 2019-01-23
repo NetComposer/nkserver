@@ -42,10 +42,13 @@
 
 -type config() :: map().
 
+% If 'use_module' is used, id is ignored as a callback module,
+% a new one is compiled from scratch based on 'use_module'
 -type spec() ::
     #{
         uuid => binary(),
         plugins => binary(),
+        use_module => module(),
         term() => term()
     }.
 
@@ -57,6 +60,7 @@
         uuid => binary(),
         plugins => [atom()],
         expanded_plugins => [atom()],         % Expanded,bottom to top
+        use_module => module(),
         timestamp => nklib_date:epoch(msecs),
         hash => integer(),
         config => config()
