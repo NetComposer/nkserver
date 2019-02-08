@@ -63,7 +63,7 @@ msg(SrvId, Msg) ->
             case Msg of
                 {Code, Reason} when is_binary(Code), is_binary(Reason) ->
                     {Code, Reason};
-                {Code, _} when is_atom(Code) ->
+                {Code, _} when is_atom(Code); is_binary(Code) ->
                     lager:notice("NkSERVER unknown msg: ~p (~p)", [Msg, SrvId]),
                     {to_bin(Code), to_bin(Code)};
                 Other ->
