@@ -182,7 +182,7 @@ get_all_status(Class) ->
 
 stop_local_all() ->
     SrvIds = [SrvId || {SrvId, _Class, _Hash, _Pid} <- get_local_all()],
-    lists:foreach(fun(SrvId) -> nksip:stop(SrvId) end, SrvIds).
+    lists:foreach(fun(SrvId) -> nkserver:stop(SrvId) end, SrvIds).
 
 
 %% @doc Gets all started services
@@ -191,7 +191,7 @@ stop_local_all() ->
 
 stop_local_all(Class) ->
     SrvIds = [SrvId || {SrvId, _Pid} <- get_local_all(Class)],
-    lists:foreach(fun(SrvId) -> nksip:stop(SrvId) end, SrvIds).
+    lists:foreach(fun(SrvId) -> nkserver:stop(SrvId) end, SrvIds).
 
 
 %% @private

@@ -21,7 +21,7 @@
 -module(nkserver).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([start_link/3, get_sup_spec/3]).
+-export([start_link/3, get_sup_spec/3, stop/1]).
 -export([update/2, replace/2]).
 -export([get_all_status/0, get_all_status/1]).
 -export([get_plugin_config/3, get/2, get/3, put/3, put_new/3, del/2]).
@@ -93,6 +93,11 @@ get_sup_spec(PkgClass, SrvId, Spec) when is_atom(SrvId), is_map(Spec) ->
         shutdown => 15000,
         type => supervisor
     }.
+
+
+%% @private
+stop(SrvId) ->
+    nkserver_srv_sup:stop(SrvId).
 
 
 %% @doc Updates a service configuration in local node
