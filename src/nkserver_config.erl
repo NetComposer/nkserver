@@ -66,14 +66,19 @@ do_config(#{id:=Id, class:=Class}=Spec, OldService) ->
         _ ->
             throw({error, class_cannot_be_updated})
     end,
-    UseMaster = maps:get(use_master, Spec, maps:get(use_master, OldService)),
-    case UseMaster /= maps:get(use_master, OldService) of
-        true ->
+    UseMaster = case {Spec, OldService} of
+        {#{use_master:=UseMaster0}, #{use_master:=UseMaster0}} ->
+            UseMaster0;
+        {#{use_master:=_}, #{use_master:=_}} ->
             throw({error, use_master_cannot_be_updated});
-        false ->
-            ok
+        {#{use_master:=UseMaster0}, _} ->
+            UseMaster0;
+        {_, #{use_master:=UseMaster0}} ->
+            UseMaster0;
+        {_, _} ->
+            false
     end,
-    MinNodes = maps:get(master_min_nodes, Spec, maps:get(master_min_nodes, OldService)),
+    MinNodes = maps:get(master_min_nodes, Spec, maps:get(master_min_nodes, OldService, 0)),
     Plugins = maps:get(plugins, Spec, maps:get(plugins, OldService, [])),
     Service1 = Spec#{
         uuid => UUID,

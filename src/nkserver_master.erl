@@ -275,7 +275,7 @@ find_leader(#state{id=SrvId, leader_pid=Pid}=State) ->
 
 %% @private
 try_become_leader(#state{id=SrvId, leader_pid=undefined}=State) ->
-    #{master_min_nodes:=MinNodes} = ?CALL_SRV(SrvId, config, #{}),
+    MinNodes = ?CALL_SRV(SrvId, master_min_nodes, []),
     Nodes = length(nodes()),
     case Nodes >= MinNodes of
         true ->

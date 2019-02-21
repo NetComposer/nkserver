@@ -173,7 +173,7 @@ make_module(#{id:=Id}=Service) ->
     ?SRV_LOG(debug, "starting dispatcher recompilation...", [], Service),
     ServiceKeys = [
         id, class, uuid, hash, timestamp, plugins, expanded_plugins,
-        config, config_cache
+        config, use_master, master_min_nodes, config_cache
     ],
     {ServiceExported, ServiceFuns} = make_service_funs(ServiceKeys, Service),
     PluginList = maps:get(expanded_plugins, Service),

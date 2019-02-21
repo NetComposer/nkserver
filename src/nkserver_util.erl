@@ -136,11 +136,13 @@ get_spec(SrvId, PkgClass, Opts) ->
         uuid => binary,
         plugins => {list, atom},
         use_module => module,
+        use_master => boolean,
+        master_min_nodes => {integer, 0, none},
         '__allow_unknown' => true
     },
     case nklib_syntax:parse(Opts2, Syntax) of
         {ok, Opts3, _} ->
-            CoreOpts = [uuid, plugins, use_module],
+            CoreOpts = [uuid, plugins, use_module, use_master, master_min_nodes],
             Opts4 = maps:with(CoreOpts, Opts3),
             Config = maps:without(CoreOpts, Opts3),
             Spec = Opts4#{
