@@ -215,6 +215,7 @@ recompile(Pid) ->
     class :: nkserver:class(),
     service :: nkserver:service(),
     service_status :: service_status(),
+    master_pid :: pid() | undefined,
     worker_sup_pid :: pid(),
     user :: map()
 }).
@@ -222,7 +223,7 @@ recompile(Pid) ->
 
 
 %% @private
-init(#{id:=SrvId, class:=Class}=Service) ->
+init(#{id:=SrvId, class:=Class, use_master:=UseMaster}=Service) ->
     process_flag(trap_exit, true),          % Allow receiving terminate/2
     case init_srv(Service) of
         ok ->
@@ -238,6 +239,12 @@ init(#{id:=SrvId, class:=Class}=Service) ->
                 user = UserState
             },
             State2 = set_workers_supervisor(State1),
+            State3 = case UseMaster of
+                true ->
+                    start_master(State2);
+                false ->
+                    State2
+            end,
             self() ! nkserver_timed_check_status,
             pg2:create(?MODULE),
             pg2:join(?MODULE, self()),
@@ -245,7 +252,7 @@ init(#{id:=SrvId, class:=Class}=Service) ->
             pg2:join({?MODULE, SrvId}, self()),
             ?LLOG(notice, "service server started (~p, ~p)",
                      [State2#state.worker_sup_pid, self()], State2),
-            {ok, State2};
+            {ok, State3};
         {error, Error} ->
             {stop, Error}
     end.
@@ -320,6 +327,10 @@ handle_info({'DOWN', _Ref, process, Pid, Reason}, #state{worker_sup_pid =Pid}=St
     State2 = set_workers_supervisor(State),
     State3 = update_status({error, supervisor_failed}, State2),
     {noreply, State3};
+
+handle_info({'DOWN', _Ref, process, Pid, Reason}, #state{master_pid =Pid}=State) ->
+    ?LLOG(warning, "service master has failed!: ~p", [Reason], State),
+    {noreply, start_master(State)};
 
 handle_info(Msg, State) ->
     case handle(srv_handle_info, [Msg], State) of
@@ -615,6 +626,11 @@ update_status(Status, #state{service_status =PkgStatus}=State) ->
     end.
 
 
+%% @private
+start_master(#state{id=SrvId}=State) ->
+    {ok, MasterPid} = nkserver_master:start_link(SrvId),
+    monitor(process, MasterPid),
+    State#state{master_pid = MasterPid}.
 
 
 

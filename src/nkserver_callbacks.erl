@@ -25,6 +25,9 @@
 -export([srv_init/2, srv_handle_call/4, srv_handle_cast/3,
          srv_handle_info/3, srv_code_change/4, srv_terminate/3,
          srv_timed_check/2]).
+-export([srv_master_init/2, srv_master_handle_call/4, srv_master_handle_cast/3,
+         srv_master_handle_info/3, srv_master_code_change/4, srv_master_terminate/3,
+         srv_master_timed_check/3]).
 
 -export_type([continue/0]).
 
@@ -38,6 +41,7 @@
 
 -type continue() :: continue | {continue, list()}.
 %-type req() :: #nkreq{}.
+-type id() :: nkserver:id().
 -type user_state() :: map().
 -type service() :: nkserver:service().
 
@@ -110,7 +114,7 @@ msg(_)   		                    -> continue.
 
 
 %% @doc
--spec i18n(nkserver:id(), nklib_i18n:key(), nklib_i18n:lang()) ->
+-spec i18n(id(), nklib_i18n:key(), nklib_i18n:lang()) ->
     <<>> | binary().
 
 i18n(SrvId, Key, Lang) ->
@@ -131,7 +135,7 @@ srv_init(_Service, UserState) ->
 
 
 %% @doc Called when the service process receives a handle_call/3.
--spec srv_handle_call(term(), {pid(), reference()}, service(), user_state()) ->
+-spec srv_handle_call(term(), {pid(), reference()}, id(), user_state()) ->
 	{reply, term(), user_state()} | {noreply, user_state()} | continue().
 
 srv_handle_call(_Msg, _From, _Service, _State) ->
@@ -181,81 +185,63 @@ srv_timed_check(_Service, State) ->
 
 
 
+%% ===================================================================
+%% Service Server MASTER Callbacks
+%% ===================================================================
 
-%%%% ===================================================================
-%%%% Service Master Callbacks
-%%%% These callbacks are called by the service master process running
-%%%% at each node. One of the will be elected master
-%%%% ===================================================================
-%%
-%%
-%%%% @doc
-%%-spec service_master_init(nkserver:id(), user_state()) ->
-%%    {ok, user_state()} | {stop, term()}.
-%%
-%%service_master_init(_SrvId, UserState) ->
-%%    {ok, UserState}.
-%%
-%%
-%%%% @doc
-%%-spec service_master_leader(nkserver:id(), boolean(), pid()|undefined, user_state()) ->
-%%    {ok, user_state()}.
-%%
-%%service_master_leader(_SrvId, _IsLeader, _Pid, UserState) ->
-%%    {ok, UserState}.
-%%
-%%
-%%%% @doc Find an UUID in global database
-%%-spec service_master_find_uid(UID::binary(), user_state()) ->
-%%    {reply, #actor_id{}, user_state()} |
-%%    {stop, actor_not_found|term(), user_state()} |
-%%    continue().
-%%
-%%service_master_find_uid(_UID, UserState) ->
-%%    {stop, actor_not_found, UserState}.
-%%
-%%
-%%%% @doc Called when the service master process receives a handle_call/3.
-%%-spec service_master_handle_call(term(), {pid(), reference()}, user_state()) ->
-%%    {reply, term(), user_state()} | {noreply, user_state()} | continue().
-%%
-%%service_master_handle_call(Msg, _From, State) ->
-%%    lager:error("Module nkserver_master received unexpected call ~p", [Msg]),
-%%    {noreply, State}.
-%%
-%%
-%%%% @doc Called when the service master process receives a handle_cast/3.
-%%-spec service_master_handle_cast(term(), user_state()) ->
-%%    {noreply, user_state()} | continue().
-%%
-%%service_master_handle_cast(Msg, State) ->
-%%    lager:error("Module nkserver_master received unexpected cast ~p", [Msg]),
-%%    {noreply, State}.
-%%
-%%
-%%%% @doc Called when the service master process receives a handle_info/3.
-%%-spec service_master_handle_info(term(), user_state()) ->
-%%    {noreply, user_state()} | continue().
-%%
-%%service_master_handle_info({'EXIT', _, normal}, State) ->
-%%    {noreply, State};
-%%
-%%service_master_handle_info(Msg, State) ->
-%%    lager:notice("Module nkserver_master received unexpected info ~p", [Msg]),
-%%    {noreply, State}.
-%%
-%%
-%%-spec service_leader_code_change(term()|{down, term()}, user_state(), term()) ->
-%%    {ok, user_state()} | {error, term()} | continue().
-%%
-%%service_leader_code_change(_OldVsn, State, _Extra) ->
-%%    {ok, State}.
-%%
-%%
-%%%% @doc Called when a service is stopped
-%%-spec service_master_terminate(term(), user_state()) ->
-%%    ok.
-%%
-%%service_master_terminate(_Reason, _State) ->
-%%    ok.
+%% @doc Called when a new service starts, first for the top-level plugin
+-spec srv_master_init(id(), user_state()) ->
+    {ok, user_state()} | {stop, term()} | continue().
 
+srv_master_init(_SrvId, UserState) ->
+    {ok, UserState}.
+
+
+%% @doc Called when the service process receives a handle_call/3.
+-spec srv_master_handle_call(term(), {pid(), reference()}, id(), user_state()) ->
+    {reply, term(), user_state()} | {noreply, user_state()} | continue().
+
+srv_master_handle_call(_Msg, _From, _SrvId, _State) ->
+    continue.
+
+
+%% @doc Called when the NkApp process receives a handle_cast/3.
+-spec srv_master_handle_cast(term(), id(), user_state()) ->
+    {noreply, user_state()} | continue().
+
+srv_master_handle_cast(_Msg, _SrvId, _State) ->
+    continue.
+
+
+%% @doc Called when the NkApp process receives a handle_info/3.
+-spec srv_master_handle_info(term(), id(), user_state()) ->
+    {noreply, user_state()} | continue().
+
+srv_master_handle_info({'EXIT', _, normal}, _SrvId, State) ->
+    {noreply, State};
+
+srv_master_handle_info(_Msg, _SrvId, _State) ->
+    continue.
+
+
+-spec srv_master_code_change(term()|{down, term()}, id(), user_state(), term()) ->
+    ok | {ok, service()} | {error, term()} | continue().
+
+srv_master_code_change(OldVsn, _SrvId, State, Extra) ->
+    {continue, [OldVsn, State, Extra]}.
+
+
+%% @doc Called when a service is stopped
+-spec srv_master_terminate(term(), service(), service()) ->
+    {ok, service()}.
+
+srv_master_terminate(_Reason, _SrvId, State) ->
+    {ok, State}.
+
+
+%% @doc Called periodically
+-spec srv_master_timed_check(IsMaster::boolean(), id(), user_state()) ->
+    {ok, user_state()}.
+
+srv_master_timed_check(_IsMaster, _SrvId, State) ->
+    {ok, State}.

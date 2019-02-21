@@ -49,6 +49,8 @@
         uuid => binary(),
         plugins => binary(),
         use_module => module(),
+        use_master => boolean(),
+        master_min_nodes => pos_integer(),
         term() => term()
     }.
 
@@ -61,6 +63,8 @@
         plugins => [atom()],
         expanded_plugins => [atom()],         % Expanded,bottom to top
         use_module => module(),
+        user_master => boolean(),
+        master_min_nodes => pos_integer(),
         timestamp => nklib_date:epoch(msecs),
         hash => integer(),
         config => config()

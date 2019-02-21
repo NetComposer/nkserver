@@ -66,11 +66,21 @@ do_config(#{id:=Id, class:=Class}=Spec, OldService) ->
         _ ->
             throw({error, class_cannot_be_updated})
     end,
+    UseMaster = maps:get(use_master, Spec, maps:get(use_master, OldService)),
+    case UseMaster /= maps:get(use_master, OldService) of
+        true ->
+            throw({error, use_master_cannot_be_updated});
+        false ->
+            ok
+    end,
+    MinNodes = maps:get(master_min_nodes, Spec, maps:get(master_min_nodes, OldService)),
     Plugins = maps:get(plugins, Spec, maps:get(plugins, OldService, [])),
     Service1 = Spec#{
         uuid => UUID,
         plugins => Plugins,
-        timestamp =>  nklib_date:epoch(msecs)
+        use_master => UseMaster,
+        master_min_nodes => MinNodes,
+        timestamp => nklib_date:epoch(msecs)
     },
     Service2 = config_plugins(Service1),
     Service3 = config_cache(Service2),
@@ -89,10 +99,17 @@ config_plugins(Service) ->
     % Plugins2 is the expanded list of plugins, first bottom, last top (Id)
     Plugins2 = expand_plugins(Id, [PkgMod|Plugins]),
     ?SRV_LOG(debug, "starting configuration", [], Service),
+    Meta = nkserver_util:get_package_class_meta(Class),
+    Service2 = case Meta of
+        #{use_master:=true} ->
+            Service#{use_master := true};
+        _ ->
+            Service
+    end,
     % High to low
-    Service2 = config_plugins(lists:reverse(Plugins2), Service),
-    Hash = erlang:phash2(maps:without([hash, uuid], Service2)),
-    Service2#{
+    Service3 = config_plugins(lists:reverse(Plugins2), Service2),
+    Hash = erlang:phash2(maps:without([hash, uuid], Service3)),
+    Service3#{
         expanded_plugins => Plugins2,
         hash => Hash
     }.
