@@ -54,6 +54,8 @@
 %% @doc This function must parse any configuration for this plugin,
 %% and can optionally modify it
 %% Top-level plugins will be called first, so they can set up configurations for low-level
+%% Plugins must keep unknown options to be use by next plugins
+%% It is recommended to use nkserver_util:parse_config/2
 -callback plugin_config(id(), config(), service()) ->
     ok | {ok, config()} | {error, term()}.
 

@@ -23,7 +23,7 @@
 
 -export([register_package_class/2, register_package_class/3,
          get_package_class_module/1, get_package_class_meta/1]).
--export([name/1]).
+-export([name/1, parse_config/2]).
 -export([register_for_changes/1, notify_updated_service/1]).
 -export([get_net_ticktime/0, set_net_ticktime/2]).
 -export([get_spec/3]).
@@ -100,6 +100,13 @@ notify_updated_service(SrvId) ->
 %% @private
 name(Name) ->
     nklib_parse:normalize(Name, #{space=>$_, allowed=>[$+, $-, $., $_]}).
+
+
+%% @doc
+parse_config(Config, Syntax) ->
+    nklib_syntax:parse_all(Config, Syntax).
+
+
 
 
 %%%% @doc

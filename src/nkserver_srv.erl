@@ -43,8 +43,8 @@
 -behaviour(gen_server).
 
 -export([start_link/1, replace/2, get_status/1]).
--export([get_local_all/0, get_local_all/1, get_all_status/0, get_all_status/1]).
--export([stop_local_all/0, stop_local_all/1, get_service/1]).
+-export([get_all_local/0, get_all_local/1, get_status_all/0, get_status_all/1]).
+-export([stop_all_local/0, stop_all_local/1, get_service/1]).
 -export([call/2, call/3, cast/2]).
 -export([get_service_childs/1, recompile/1]).
 -export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2,
@@ -140,25 +140,25 @@ cast(SrvId, Term) ->
 
 
 %% @doc Gets all started services
--spec get_local_all() ->
+-spec get_all_local() ->
     [{id(), nkserver:class(), integer(), pid()}].
 
-get_local_all() ->
+get_all_local() ->
     [{SrvId, Class, Hash, Pid} ||
-        {{SrvId, Class, Hash}, Pid} <- nklib_proc:values(nkserver_srv)].
+        {{SrvId, Class, Hash}, Pid} <- nklib_proc:values(?MODULE)].
 
 
 %% @doc Gets all started services
--spec get_local_all(nkserver:class()) ->
-    [{id(), pid()}].
+-spec get_all_local(nkserver:class()) ->
+    [{id(), nkserver:class(), pid()}].
 
-get_local_all(Class) ->
+get_all_local(Class) ->
     Class2 = nklib_util:to_binary(Class),
-    [{SrvId, Pid} || {SrvId, C, _H, Pid} <- get_local_all(), C==Class2].
+    [{SrvId, Hash, Pid} || {{SrvId, Hash}, Pid} <- nklib_proc:values({?MODULE, Class2})].
 
 
 %% @doc Gets all instances in all nodes
-get_all_status() ->
+get_status_all() ->
     lists:foldl(
         fun(Pid, Acc) ->
             case catch get_status(Pid) of
@@ -171,26 +171,26 @@ get_all_status() ->
 
 
 %% @doc Gets all instances in all nodes
-get_all_status(Class) ->
+get_status_all(Class) ->
     Class2 = nklib_util:to_binary(Class),
-    [Status || Status<-get_all_status(), {ok, Class2} == maps:find(class, Status)].
+    [Status || Status<- get_status_all(), {ok, Class2} == maps:find(class, Status)].
 
 
 %% @doc Stops all started services
--spec stop_local_all() ->
+-spec stop_all_local() ->
     ok.
 
-stop_local_all() ->
-    SrvIds = [SrvId || {SrvId, _Class, _Hash, _Pid} <- get_local_all()],
+stop_all_local() ->
+    SrvIds = [SrvId || {SrvId, _Class, _Hash, _Pid} <- get_all_local()],
     lists:foreach(fun(SrvId) -> nkserver:stop(SrvId) end, SrvIds).
 
 
 %% @doc Gets all started services
--spec stop_local_all(nkserver:class()) ->
+-spec stop_all_local(nkserver:class()) ->
     ok.
 
-stop_local_all(Class) ->
-    SrvIds = [SrvId || {SrvId, _Pid} <- get_local_all(Class)],
+stop_all_local(Class) ->
+    SrvIds = [SrvId || {SrvId, _Pid} <- get_all_local(Class)],
     lists:foreach(fun(SrvId) -> nkserver:stop(SrvId) end, SrvIds).
 
 
@@ -370,6 +370,7 @@ init_srv(Service) ->
     #{id:=SrvId, class:=Class, hash:=Hash} = Service,
     nklib_proc:put(?MODULE, {SrvId, Class, Hash}),
     nklib_proc:put({?MODULE, SrvId}, {Class, Hash}),
+    nklib_proc:put({?MODULE, Class}, {SrvId, Hash}),
     nkserver_dispatcher:compile(Service).
 
 

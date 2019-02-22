@@ -125,12 +125,12 @@ replace(SrvId, Spec) ->
 
 %% @doc Gets all instances in all nodes
 get_all_status() ->
-    nkserver_srv:get_all_status().
+    nkserver_srv:get_status_all().
 
 
 %% @doc Gets all instances in all nodes
 get_all_status(Class) ->
-    nkserver_srv:get_all_status(Class).
+    nkserver_srv:get_status_all(Class).
 
 
 %% @doc Get a plugin configuration

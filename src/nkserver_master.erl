@@ -309,6 +309,7 @@ resolve({nkserver_leader, _SrvId}, Pid1, _Pid2) ->
 %% @private
 %% Will call the service's functions
 handle(Fun, Args, #state{id=SrvId, user_state=UserState}=State) ->
+    % lager:error("NKLOG CALLING  ~p ~p ~p ", [SrvId, Fun, Args++[SrvId, UserState]]),
     case ?CALL_SRV(SrvId, Fun, Args++[SrvId, UserState]) of
         {reply, Reply, UserState2} ->
             {reply, Reply, State#state{user_state=UserState2}};
