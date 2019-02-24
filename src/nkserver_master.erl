@@ -237,7 +237,7 @@ find_leader(#state{id=SrvId, leader_pid=undefined}=State) ->
         undefined ->
             case try_become_leader(State) of
                 yes ->
-                    {ok, State#state{is_leader = true}};
+                    {ok, State#state{is_leader=true, leader_pid=self()}};
                 no ->
                     {ok, State}
             end
