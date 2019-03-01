@@ -24,7 +24,7 @@
 -export([start_link/3, get_sup_spec/3, stop/1]).
 -export([update/2, replace/2]).
 -export([get_all_status/0, get_all_status/1]).
--export([get_plugin_config/3, get/2, get/3, put/3, put_new/3, del/2]).
+-export([get_cached_config/3, get/2, get/3, put/3, put_new/3, del/2]).
 -export([get_config/1, get_plugins/1, get_uuid/1]).
 -export_type([id/0, class/0, spec/0, service/0]).
 
@@ -63,7 +63,7 @@
         plugins => [atom()],
         expanded_plugins => [atom()],         % Expanded,bottom to top
         use_module => module(),
-        user_master => boolean(),
+        use_master => boolean(),
         master_min_nodes => pos_integer(),
         timestamp => nklib_date:epoch(msecs),
         hash => integer(),
@@ -134,7 +134,7 @@ get_all_status(Class) ->
 
 
 %% @doc Get a plugin configuration
-get_plugin_config(SrvId, PluginId, Key) ->
+get_cached_config(SrvId, PluginId, Key) ->
     ?CALL_SRV(SrvId, config_cache, [PluginId, Key]).
 
 

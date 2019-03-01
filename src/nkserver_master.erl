@@ -29,12 +29,14 @@
 -export([start_link/1]).
 -export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2,
          handle_info/2]).
--export([resolve/3]).
+-export([strategy_min_nodes/1]).
 
 -include("nkserver.hrl").
 
 -define(LLOG(Type, Txt, Args, State),
-    lager:Type("NkSERVER Master (~s) "++Txt, [State#state.id | Args])).
+    lager:Type("NkSERVER Master (~s) "++Txt, [State#state.id|Args])).
+
+-define(LLOG(Type, Txt, Args), lager:Type("NkSERVER Master "++Txt, Args)).
 
 -define(CHECK_TIME, 5000).
 
@@ -176,7 +178,7 @@ handle_cast(Msg, State) ->
 
 handle_info(nkserver_timed_check_leader, State) ->
     case find_leader(State) of
-        {ok, #state{is_leader = IsLeader}=State2} ->
+        {ok, #state{is_leader=IsLeader}=State2} ->
             {ok, State3} = handle(srv_master_timed_check, [IsLeader], State2),
             erlang:send_after(?CHECK_TIME, self(), nkserver_timed_check_leader),
             {noreply, State3};
@@ -235,11 +237,11 @@ find_leader(#state{id=SrvId, leader_pid=undefined}=State) ->
             monitor(process, Pid),
             {ok, State#state{is_leader=false, leader_pid=Pid}};
         undefined ->
-            case try_become_leader(State) of
-                yes ->
-                    {ok, State#state{is_leader=true, leader_pid=self()}};
-                no ->
-                    {ok, State}
+            case handle(srv_master_become_leader, [], State) of
+                {yes, State2} ->
+                    {ok, State2#state{is_leader=true, leader_pid=self()}};
+                {no, State2} ->
+                    {ok, State2}
             end
     end;
 
@@ -274,36 +276,8 @@ find_leader(#state{id=SrvId, leader_pid=Pid}=State) ->
 
 
 %% @private
-try_become_leader(#state{id=SrvId, leader_pid=undefined}=State) ->
-    MinNodes = ?CALL_SRV(SrvId, master_min_nodes, []),
-    Nodes = length(nodes()),
-    case Nodes >= MinNodes of
-        true ->
-            case global:register_name(global_name(SrvId), self(), fun ?MODULE:resolve/3) of
-                yes ->
-                    ?LLOG(notice, "WE are the new leader (~p)", [self()], State),
-                    yes;
-                no ->
-                    ?LLOG(notice, "could not register as leader, waiting (me:~p)", [self()], State),
-                    % Wait for next iteration
-                    no
-            end;
-        false ->
-            ?LLOG(warning, "NOT TRYING to become leader, we are in split-brain (~p/~p nodes)",
-                  [Nodes, MinNodes], State),
-            no
-    end.
-
-
-
-%% @private
 global_name(SrvId) ->
     {nkserver_leader, SrvId}.
-
-
-%% @private
-resolve({nkserver_leader, _SrvId}, Pid1, _Pid2) ->
-    Pid1.
 
 
 %% @private
@@ -323,11 +297,41 @@ handle(Fun, Args, #state{id=SrvId, user_state=UserState}=State) ->
             {stop, Reason, Reply, State#state{user_state=UserState2}};
         {stop, Reason, UserState2} ->
             {stop, Reason, State#state{user_state=UserState2}};
-        {ok, UserState2} ->
-            {ok, State#state{user_state=UserState2}};
+        {Atom, UserState2} when Atom==yes; Atom==no; Atom==ok ->
+            {Atom, State#state{user_state=UserState2}};
         continue ->
             continue;
         Other ->
             ?LLOG(warning, "invalid response for ~p(~p): ~p", [Fun, Args, Other], State),
             error(invalid_handle_response)
     end.
+
+
+%% ===================================================================
+%% Standard strategy for min nodes
+%% ===================================================================
+
+strategy_min_nodes(SrvId) ->
+    MinNodes = ?CALL_SRV(SrvId, master_min_nodes, []),
+    Nodes = length(nodes()),
+    case Nodes >= MinNodes of
+        true ->
+            case global:register_name(global_name(SrvId), self(), fun ?MODULE:resolve/3) of
+                yes ->
+                    ?LLOG(notice, "WE are the new leader (~s) (~p)", [SrvId, self()]),
+                    yes;
+                no ->
+                    ?LLOG(notice, "could not register as leader (~s), waiting (me:~p)", [SrvId, self()]),
+                    % Wait for next iteration
+                    no
+            end;
+        false ->
+            ?LLOG(warning, "NOT TRYING to become leader, we are in split-brain (~s), (~p/~p nodes)",
+                 [SrvId, Nodes, MinNodes]),
+            no
+    end.
+
+
+%% @private
+resolve({nkserver_leader, _SrvId}, Pid1, _Pid2) ->
+    Pid1.

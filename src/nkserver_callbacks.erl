@@ -27,7 +27,7 @@
          srv_timed_check/2]).
 -export([srv_master_init/2, srv_master_handle_call/4, srv_master_handle_cast/3,
          srv_master_handle_info/3, srv_master_code_change/4, srv_master_terminate/3,
-         srv_master_timed_check/3]).
+         srv_master_timed_check/3, srv_master_become_leader/2]).
 
 -export_type([continue/0]).
 
@@ -245,3 +245,11 @@ srv_master_terminate(_Reason, _SrvId, State) ->
 
 srv_master_timed_check(_IsMaster, _SrvId, State) ->
     {ok, State}.
+
+
+%% @doc Called when this node tries to become leader
+-spec srv_master_become_leader(id(), user_state()) ->
+    {yes|no, user_state()}.
+
+srv_master_become_leader(SrvId, State) ->
+    {nkserver_master:strategy_min_nodes(SrvId), State}.
