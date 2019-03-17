@@ -10,7 +10,8 @@
         crypto,
         ssl,
         lager,
-        nklib
+        nklib,
+        otters
     ]},
     {env, [
     ]}
