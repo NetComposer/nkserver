@@ -112,20 +112,14 @@ plugin_group() ->
 	undefined.
 
 
-plugin_config(_Id, Config, _Service) ->
-    Syntax = #{
-        opentrace_url => binary,
-        opentrace_filter => binary
-    },
-    nkserver_util:parse_config(Config, Syntax).
-
+plugin_config(_Id, _Config, _Service) ->
+    ok.
 
 plugin_cache(_Id, _Config, _Service) ->
     ok.
 
 
-plugin_start(_Id, Config, _Service) ->
-    update_otters(Config),
+plugin_start(_Id, _Config, _Service) ->
     ok.
 
 
@@ -133,8 +127,7 @@ plugin_stop(_Id, _Config, _Service) ->
 	ok.
 
 
-plugin_update(_Id, NewConfig, _OldConfig, _Service) ->
-    update_otters(NewConfig),
+plugin_update(_Id, _NewConfig, _OldConfig, _Service) ->
     ok.
 
 
@@ -142,32 +135,3 @@ plugin_update(_Id, NewConfig, _OldConfig, _Service) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
-
-update_otters(Config) ->
-    case maps:find(opentrace_url, Config) of
-        {ok, Url} ->
-            ok = application:set_env(otters, zipkin_collector_uri, to_list(Url)),
-            case maps:find(opentrace_filter, Config) of
-                {ok, Filter} ->
-                    ok = ol:compile(to_list(Filter));
-                error ->
-                    ol:clear()
-            end;
-        error ->
-            ok
-    end.
-
-
-
-
-%%{zipkin_collector_uri,"http://127.0.0.1:9411/api/v1/spans"},
-%%%{zipkin_collector_uri, "http://127.0.0.1:14268/api/traces?format=zipkin.thrift"},
-%%{zipkin_batch_interval_ms, 100},
-%%{zipkin_tag_host_ip, {127,0,0,1}},
-%%{zipkin_tag_host_port, 0},
-%%{zipkin_tag_host_service, "netcomp_smspro"},
-%%{zipkin_add_default_service_to_logs, false},
-%%{zipkin_add_default_service_to_tags, false},
-%%{zipkin_add_host_tag_to_span,{"lc",[]}}
-
-
