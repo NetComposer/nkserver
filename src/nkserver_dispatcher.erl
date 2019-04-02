@@ -183,9 +183,9 @@ make_module(#{id:=Id}=Service) ->
     AllExported = ServiceExported ++ PluginExported ++ CacheExported,
     ModForms = make_module(Id, AllExported, AllFuns),
     DispatcherMod = gen_dispatcher_mod(Id),
-    case nkserver_app:get(saveDispatcherSource) of
+    case nkserver_app:get(save_dispatcher_source) of
         true ->
-            Path = nkserver_app:get(logPath),
+            Path = nkserver_app:get(log_path),
             ?SRV_LOG(debug, "saving to disk...", [], Service),
             ok = nklib_code:write(DispatcherMod, ModForms, Path);
         false ->

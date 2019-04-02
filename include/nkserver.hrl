@@ -7,12 +7,6 @@
 
 -define(SRV_DELAYED_DESTROY, 3000).
 
--define(PKG_HTTPPOOL, <<"HttpPool">>).
--define(PKG_REST, <<"RestServer">>).
--define(PKG_WEBSERVER, <<"WebServer">>).
--define(PKG_JOSE, <<"JOSE">>).
--define(PKG_PGSQL, <<"PgSQL">>).
-
 
 %% ===================================================================
 %% Records

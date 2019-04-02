@@ -342,7 +342,7 @@ get_plugin_deps_list([Plugin|Rest], Deps, Optional) when is_atom(Plugin) ->
 
 %% @private
 update_uuid(Id, Spec) ->
-    LogPath = nkserver_app:get(logPath),
+    LogPath = nkserver_app:get(log_path),
     Path = filename:join(LogPath, atom_to_list(Id)++".uuid"),
     case read_uuid(Path) of
         {ok, UUID} ->

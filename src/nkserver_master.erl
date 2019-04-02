@@ -90,7 +90,7 @@ call_leader(SrvId, Msg, Timeout) ->
     case get_leader_pid(SrvId) of
         Pid when is_pid(Pid) ->
             case nklib_util:call2(Pid, Msg, Timeout) of
-                {error, process_not_found} ->
+                process_not_found ->
                     {error, leader_not_found};
                 Other ->
                     Other
@@ -332,6 +332,6 @@ strategy_min_nodes(SrvId) ->
     end.
 
 
-%% @private
-resolve({nkserver_leader, _SrvId}, Pid1, _Pid2) ->
-    Pid1.
+%%%% @private
+%%resolve({nkserver_leader, _SrvId}, Pid1, _Pid2) ->
+%%    Pid1.

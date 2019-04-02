@@ -49,8 +49,7 @@ start() ->
     ok | {error, Reason::term()}.
 
 start(Type) ->
-    % nkdist_util:ensure_dir(),
-    case nklib_util:ensure_all_started(?APP, Type) of
+    case application:ensure_all_started(?APP, Type) of
         {ok, _Started} ->
             ok;
         Error ->
@@ -61,22 +60,22 @@ start(Type) ->
 %% @doc
 start(_Type, _Args) ->
     Syntax = #{
-        logPath => binary,
-        saveDispatcherSource => boolean,
+        log_path => binary,
+        save_dispatcher_source => boolean,
         nodes => {list, binary},
         '__defaults' => #{
-            logPath => <<"log">>,
-            saveDispatcherSource => true
+            log_path => <<"log">>,
+            save_dispatcher_source => true
         }
     },
     case nklib_config:load_env(?APP, Syntax) of
         {ok, _} ->
-            file:make_dir(get(logPath)),
+            file:make_dir(get(log_path)),
             {ok, Pid} = nkserver_sup:start_link(),
             {ok, Vsn} = application:get_key(nkserver, vsn),
             % register_packages(),
-            CallbacksHttpUrl = get(callbacksHttpUrl),
-            put(callbacksHttpUrl, nklib_url:norm(CallbacksHttpUrl)),
+            %CallbacksHttpUrl = get(callbacksHttpUrl),
+            %put(callbacksHttpUrl, nklib_url:norm(CallbacksHttpUrl)),
             lager:info("NkSERVER v~s has started.", [Vsn]),
             % Dummy package for tests
             nkserver_util:register_package_class(<<"Service">>, nkserver),
@@ -86,15 +85,6 @@ start(_Type, _Args) ->
             lager:error("Error parsing config: ~p", [Error]),
             error(Error)
     end.
-
-
-%% @doc 
-%%register_packages() ->
-%%    ok = nkserver_util:register_package_class(?PKG_HTTPPOOL, nkserver_httppool),
-%%    ok = nkserver_util:register_package_class(?PKG_REST, nkserver_rest),
-%%    ok = nkserver_util:register_package_class(?PKG_WEBSERVER, nkserver_webserver),
-%%    ok = nkserver_util:register_package_class(?PKG_JOSE, nkserver_jose),
-%%    ok = nkserver_util:register_package_class(?PKG_PGSQL, nkserver_pgsql).
 
 
 
