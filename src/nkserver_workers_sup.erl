@@ -25,7 +25,7 @@
 
 -export([start_link/1, init/1]).
 -export([get_pid/1, add_child/2, remove_child/2, remove_all_childs/1, get_childs/1]).
--export([update_child/3, update_child_multi/3]).
+-export([update_child/3, update_child2/3, update_child_multi/3]).
 
 -include("nkserver.hrl").
 
@@ -110,7 +110,7 @@ remove_all_childs(SrvId) ->
 %% - If ChildId is not present, starts a new child.
 %% - If it is present and has the same Spec, nothing is done
 %% - If it is present but has a different Spec, it is restarted (see restart_delay)
-%%
+%% - You must use all fields in Spec for this to work!
 -spec update_child(nkserver:id()|pid(), supervisor:child_spec(), update_opts()) ->
     {added, pid()} | {upgraded, pid()} | not_updated | {error, term()}.
 
@@ -142,6 +142,49 @@ update_child(SrvId, #{id:=ChildId}=Spec, Opts) ->
             end
     end.
 
+
+%% @doc Starts or updates a child
+%% - If ChildId is not present, starts a new child.
+%% - If it is present and has the same Spec, nothing is done
+%% - If it is present but has a different Spec, it is restarted (see restart_delay)
+%% - You must use all fields in Spec for this to work!
+-spec update_child2(nkserver:id()|pid(), supervisor:child_spec(), update_opts()) ->
+    {added|upgraded|not_updated, pid()} | {error, term()}.
+
+update_child2(SrvId, #{id:=ChildId}=Spec, Opts) ->
+    Pid = get_pid(SrvId),
+    case supervisor:get_childspec(Pid, ChildId) of
+        {ok, Spec} ->
+            case supervisor:start_child(Pid, Spec) of
+                {ok, ChildPid} ->
+                    {added, ChildPid};
+                {error, {already_started, ChildPid}} ->
+                    {not_updated, ChildPid};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {ok, _OldSpec} ->
+            case remove_child(Pid, ChildId) of
+                ok ->
+                    Delay = maps:get(restart_delay, Opts, 500),
+                    timer:sleep(Delay),
+                    case supervisor:start_child(Pid, Spec) of
+                        {ok, ChildPid} ->
+                            {upgraded, ChildPid};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, not_found} ->
+            case supervisor:start_child(Pid, Spec) of
+                {ok, ChildPid} ->
+                    {added, ChildPid};
+                {error, Error} ->
+                    {error, Error}
+            end
+    end.
 
 
 
