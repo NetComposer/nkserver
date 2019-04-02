@@ -2,12 +2,13 @@
 
 # Introduction
 
-NkSERVER is an Erlang framework to develop servers based on powerful plugin mechanism. A growing number of _Packages_ following this pattern are available, like Rest servers, Kafka producers and consumers, database connectors, etc. [NkSIP](https://github.com/NetComposer/nksip) is also based on NKSERVER.
+NkSERVER is an Erlang framework to develop microservices based on powerful plugin mechanism. A growing number of _Packages_ following this pattern are available, like Rest servers, Kafka producers and consumers, database connectors, etc. [NkSIP](https://github.com/NetComposer/nksip) is also based on NKSERVER.
 
 ## Characteristics
 
+* Any Erlang application can start any number of _services_, inserting them in its OTP application supervisor.
 * A powerful plugin mechanism, so that any package is made of a set of _plugins_ and some custom login.
-* New packages and modules can be added or removed at any moment. Its configuration can be changed at any moment.
+* Configuration for services can be changed at any moment.
 * Designed from scratch to be highly scalable, having a very low latency.
 * Rich set of Packages already available to build servers.
 
