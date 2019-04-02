@@ -45,6 +45,7 @@
 -export([start_link/1, replace/2, get_status/1]).
 -export([get_all_local/0, get_all_local/1, get_status_all/0, get_status_all/1]).
 -export([stop_all_local/0, stop_all_local/1, get_service/1]).
+-export([get_instances/1, get_random_instance/1]).
 -export([call/2, call/3, cast/2]).
 -export([get_service_childs/1, recompile/1]).
 -export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2,
@@ -155,6 +156,28 @@ get_all_local() ->
 get_all_local(Class) ->
     Class2 = nklib_util:to_binary(Class),
     [{SrvId, Hash, Pid} || {{SrvId, Hash}, Pid} <- nklib_proc:values({?MODULE, Class2})].
+
+
+%% @doc Gets all started services for a service
+-spec get_instances(nkserver:id()) ->
+    [pid()].
+
+get_instances(SrvId) ->
+    pg2:get_members({?MODULE, SrvId}).
+
+
+%% @doc Gets a random instance in the cluster
+-spec get_random_instance(nkserver:id()) ->
+    pid()|undefined.
+
+get_random_instance(SrvId) ->
+    case nkserver_srv:get_instances(SrvId) of
+        [] ->
+            undefined;
+        Pids ->
+            Pos = nklib_date:epoch(usecs) rem length(Pids),
+            lists:nth(Pos+1, Pids)
+    end.
 
 
 %% @doc Gets all instances in all nodes
@@ -429,7 +452,7 @@ do_get_status(State) ->
 
 %% @private
 %% Will call the service's functions
-handle(Fun, Args, #state{id=SrvId, service =Service, user=UserState}=State) ->
+handle(Fun, Args, #state{id=SrvId, service=Service, user=UserState}=State) ->
     case ?CALL_SRV(SrvId, Fun, Args++[Service, UserState]) of
         {reply, Reply, UserState2} ->
             {reply, Reply, State#state{user=UserState2}};
