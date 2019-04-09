@@ -36,6 +36,9 @@
 %%
 %% Service stop
 %% - Services are stopped sequentially (high to low)
+%%
+%% If option 'use_master' is used, a local 'nkserver_master' will be started
+%% at each node, one of them will become master
 
 
 -module(nkserver_srv).

@@ -19,8 +19,10 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc Master server elected for a service when option
-%% 'use_master' is used
+%% @doc When option 'use_master' is used, this server is started at each node,
+%% managed by the server's process, one of them will become 'master'
+
+
 -module(nkserver_master).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
@@ -61,43 +63,40 @@ get_leader_pid(SrvId) ->
     global:whereis_name(global_name(SrvId)).
 
 
-%%%% @private
-%%call_leader_retry(SrvId, Msg) ->
-%%    call_leader_retry(SrvId, Msg, 3).
-%%
-%%
-%%%% @private
-%%call_leader_retry(SrvId, Msg, Try) when is_atom(SrvId), Try > 0 ->
-%%    case call_leader(SrvId, Msg, 5000) of
-%%        {error, leader_not_found} ->
-%%            lager:notice("Leader for ~p not found, retrying (~p)", [SrvId, Msg]),
-%%            timer:sleep(1000),
-%%            call_leader_retry(SrvId, Msg, Try-1);
-%%        Other ->
-%%            Other
-%%    end;
-%%
-%%call_leader_retry(_SrvId, _Msg, _Try) ->
-%%    {error, leader_not_found}.
-
-
 %% @doc
 call_leader(SrvId, Msg) ->
     call_leader(SrvId, Msg, 5000).
 
 %% @doc
 call_leader(SrvId, Msg, Timeout) ->
+    call_leader(SrvId, Msg, Timeout, 30).
+
+
+%% @private
+call_leader(SrvId, Msg, Timeout, Tries) when Tries > 0 ->
     case get_leader_pid(SrvId) of
         Pid when is_pid(Pid) ->
             case nklib_util:call2(Pid, Msg, Timeout) of
                 process_not_found ->
-                    {error, leader_not_found};
+                    ?LLOG(notice, "master for service '~s' not available, retrying...", [SrvId]),
+                    timer:sleep(500),
+                    call_leader(SrvId, Msg, Timeout, Tries-1);
                 Other ->
                     Other
             end;
         undefined ->
-            {error, leader_not_found}
-    end.
+            case whereis(SrvId) of
+                undefined ->
+                    {error, service_not_started};
+                _ ->
+                    ?LLOG(notice, "master for service '~s' not available, retrying...", [SrvId]),
+                    timer:sleep(500),
+                    call_leader(SrvId, Msg, Timeout, Tries-1)
+            end
+    end;
+
+call_leader(_SrvId, _Msg, _Timeout, _Tries) ->
+    {error, leader_not_found}.
 
 
 
@@ -177,20 +176,25 @@ handle_cast(Msg, State) ->
     {noreply, #state{}} | {stop, term(), #state{}}.
 
 handle_info(nkserver_timed_check_leader, State) ->
-    case find_leader(State) of
-        {ok, #state{is_leader=IsLeader}=State2} ->
-            {ok, State3} = handle(srv_master_timed_check, [IsLeader], State2),
+    case check_leader(State) of
+        {ok, State2} ->
             erlang:send_after(?CHECK_TIME, self(), nkserver_timed_check_leader),
-            {noreply, State3};
+            {noreply, State2};
         {error, Error} ->
             {stop, Error, State}
     end;
 
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, #state{leader_pid=Pid}=State) ->
     #state{is_leader=false} = State,
-    ?LLOG(warning, "leader has failed (~p)", [Pid], State),
-    gen_server:cast(self(), nkserver_check_leader),
-    {noreply, State};
+    ?LLOG(warning, "current leader (~p) is down!", [Pid], State),
+    Time = nklib_util:rand(1, 1000),
+    timer:sleep(Time),
+    case check_leader(State) of
+        {ok, State2} ->
+            {noreply, State2};
+        {error, Error} ->
+            {stop, Error, State}
+    end;
 
 handle_info(Msg, State) ->
     case handle(srv_master_handle_info, [Msg], State) of
@@ -207,7 +211,7 @@ handle_info(Msg, State) ->
     {ok, #state{}}.
 
 code_change(OldVsn, #state{id=SrvId, user_state=UserState}=State, Extra) ->
-    case apply(SrvId, srv_code_change, [OldVsn, SrvId, UserState, Extra]) of
+    case apply(SrvId, srv_master_code_change, [OldVsn, SrvId, UserState, Extra]) of
         {ok, UserState2} ->
             {ok, State#state{user_state=UserState2}};
         {error, Error} ->
@@ -221,13 +225,23 @@ code_change(OldVsn, #state{id=SrvId, user_state=UserState}=State, Extra) ->
 
 terminate(Reason, State) ->
     ?LLOG(notice, "is stopped (~p)", [Reason], State),
-    catch handle(srv_terminate, [Reason], State),
+    catch handle(srv_master_terminate, [Reason], State),
     ok.
 
 
 %% ===================================================================
 %% Internal - Leader election
 %% ===================================================================
+
+check_leader(State) ->
+    case find_leader(State) of
+        {ok, #state{is_leader=IsLeader}=State2} ->
+            {ok, State3} = handle(srv_master_timed_check, [IsLeader], State2),
+            {ok, State3};
+        {error, Error} ->
+            {error, Error}
+    end.
+
 
 % We don't have a registered leader
 find_leader(#state{id=SrvId, leader_pid=undefined}=State) ->
@@ -244,7 +258,6 @@ find_leader(#state{id=SrvId, leader_pid=undefined}=State) ->
                     {ok, State2}
             end
     end;
-
 
 % We are the registered leader
 % We recheck now that we are the real registered leader
@@ -264,13 +277,10 @@ find_leader(#state{id=SrvId, leader_pid=Pid}=State) ->
     case get_leader_pid(SrvId) of
         Pid ->
             ok;
-        undefined ->
-            ?LLOG(notice, "could not register as leader, waiting (me:~p)", [self()], State);
         Other ->
-            % Wait for leader to fail and detect 'DOWN'
-            ?LLOG(warning, "my old leader is NOT the registered leader: ~p (~p)"
-                  " (me:~p), waiting",
-                  [Other, Pid, self()], State)
+            % Wait for old leader to fail and detect 'DOWN'
+            ?LLOG(warning, "my old leader (~p) is NOT the registered leader (~p)"
+                  " (me:~p), waiting", [Pid, Other, self()], State)
     end,
     {ok, State}.
 
@@ -316,7 +326,7 @@ strategy_min_nodes(SrvId) ->
     Nodes = length(nodes()),
     case Nodes >= MinNodes of
         true ->
-            case global:register_name(global_name(SrvId), self(), fun ?MODULE:resolve/3) of
+            case global:register_name(global_name(SrvId), self()) of
                 yes ->
                     ?LLOG(notice, "WE are the new leader (~s) (~p)", [SrvId, self()]),
                     yes;
