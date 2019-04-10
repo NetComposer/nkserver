@@ -18,7 +18,7 @@
 
 
 %% The callback module should have generated this function after parse transform
--define(CALL_SRV(Id, Fun, Args), apply(Id:nkserver_dispatcher(), Fun, Args)).
+-define(CALL_SRV(Id, Fun, Args), apply(Id, nkserver_callback, [Fun, Args])).
 
 
 -endif.

@@ -146,33 +146,44 @@ config_plugins([PluginId|Rest], #{id:=Id, config:=Config}=Service) ->
 
 
 %% @private
+%% Generates:
+%%
+%% config_cache: map of values that later on will generate the function:
+%% 'config_cache(PluginId, Key) -> Value'
+%% and can be used as nkserver:get_cached_config(SrvId, PluginId, Key)
+%%
+%% config_funs: list of entries [{callback_fun_name, Arity, SyntaxTree}]
+%% that will be added to the dispatcher module
+
 config_cache(Service) ->
     #{expanded_plugins:=Plugins} = Service,
-    Cache = config_cache(Plugins, Service, #{}),
-    Service#{config_cache => Cache}.
+    {Cache, CBs} = config_cache(Plugins, Service, #{}, []),
+    Service#{config_cache => Cache, config_callbacks=>CBs}.
 
 
 %% @private
-config_cache([], _Service, Acc) ->
-    Acc;
+config_cache([], _Service, CacheAcc, CBsAcc) ->
+    {CacheAcc, CBsAcc};
 
-config_cache([Id|Rest], #{id:=Id}=Service, Acc) ->
-    config_cache(Rest, Service, Acc);
+config_cache([Id|Rest], #{id:=Id}=Service, CacheAcc, CBsAcc) ->
+    config_cache(Rest, Service, CacheAcc, CBsAcc);
 
-config_cache([PluginId|Rest], #{id:=Id, config:=Config}=Service, Acc) ->
+config_cache([PluginId|Rest], #{id:=Id, config:=Config}=Service, CacheAcc, CBsAcc) ->
     Mod = get_plugin_mod(PluginId),
     ?SRV_LOG(debug, "calling config cache for ~s (~s)", [Id, Mod], Service),
-    Acc2 = case nklib_util:apply(Mod, plugin_cache, [Id, Config, Service]) of
+    {CacheAcc2, CBsAcc2} = case nklib_util:apply(Mod, plugin_cache, [Id, Config, Service]) of
         ok ->
-            Acc;
+            {CacheAcc, CBsAcc};
         {ok, Map} when is_map(Map) ->
-            Acc#{PluginId => Map};
+            {CacheAcc#{PluginId => Map}, CBsAcc};
+        {ok, Map, CBs} when is_map(Map), is_list(CBs) ->
+            {CacheAcc#{PluginId => Map}, CBsAcc++CBs};
         not_exported ->
-            Acc;
+            {CacheAcc, CBsAcc};
         continue ->
-            Acc
+            {CacheAcc, CBsAcc}
     end,
-    config_cache(Rest, Service, Acc2).
+    config_cache(Rest, Service, CacheAcc2, CBsAcc2).
 
 
 %% @private

@@ -18,6 +18,14 @@
 %%
 %% -------------------------------------------------------------------
 
+%% For each service, a module '[service]_callbacks_compiled' will be generated
+%% and compiled, with all service callback functions
+%% If a module exists with the service name, it must be compiled by the parse_transform
+%% (must include nkserver_callback.hrl), and functions nkserver_on_load and
+%% nkserver_callback will be added
+%% It it does not exist, a new one will be generated. If use_module is used,
+%% functions will be copied from there
+
 -module(nkserver_dispatcher).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
@@ -34,17 +42,16 @@
 %% @doc Parse transform for nkserver main callback modules
 %% - adds '-on_load({nkserver_on_load/0}).'
 %% - adds 'nkserver_on_load() -> nkserver_dispatcher:module_loaded(?MODULE).'
-%% - adds 'nkserver_dispatcher() -> (module)_nkserver_dispatcher.'
+%% - adds 'nkserver_callback(Fun, Args) -> llama a (module)_callbacks.'
 parse_transform(Forms, _Opts) ->
     % io:format("OPTS2: ~p\n", [_Opts]),
     Mod = nklib_code:forms_find_attribute(module, Forms),
-    Dispatcher = gen_dispatcher_mod(Mod),
     Attrs = [
         erl_syntax:attribute(
             erl_syntax:atom(on_load),
             [erl_syntax:abstract({nkserver_on_load, 0})]
         ),
-        nklib_code:export_attr([{nkserver_dispatcher, 0}])
+        nklib_code:export_attr([{nkserver_callback, 2}])
     ],
     Forms2 = nklib_code:forms_add_attributes(Attrs, Forms),
     Funs = [
@@ -58,13 +65,7 @@ parse_transform(Forms, _Opts) ->
                     ])
             ]
         ),
-        erl_syntax:function(
-            erl_syntax:atom(nkserver_dispatcher), [
-                erl_syntax:clause(none, [
-                    erl_syntax:abstract(Dispatcher)
-                ])
-            ]
-        )
+        make_cb_fun(Mod)
     ],
     Forms3 = nklib_code:forms_add_funs(Funs, Forms2),
     Forms4 = erl_syntax:revert_forms(Forms3),
@@ -102,30 +103,20 @@ module_loaded(Id) ->
     end.
 
 
-%% @doc Generates a barebones callback module if it is doesn't exist
+%% @doc Generates a simple callback module if it doesn't exist.
 %% If the option 'use_module' is used, module 'id' is ignored event if it exists,
 %% and a new one is compiled from scratch, copying functions from 'use_module'
 maybe_generate_mod(#{id:=Id, use_module:=Module}) ->
     {module, Module} = code:ensure_loaded(Module),
     ModInfo = Module:module_info(),
     ModExports1 = nklib_util:get_value(exports, ModInfo),
-    ModExports2 = nklib_util:remove_values([module_info, nkserver_dispatcher], ModExports1),
-    Exports = [{nkserver_dispatcher, 0} | ModExports2],
+    ModExports2 = nklib_util:remove_values([module_info, nkserver_callback], ModExports1),
+    Exports = [{nkserver_callback, 2} | ModExports2],
     ModFuns = [
         nklib_code:callback_expr(Module, Name, Arity)
         || {Name, Arity} <- ModExports2
     ],
-    Funs = [
-        erl_syntax:function(
-            erl_syntax:atom(nkserver_dispatcher), [
-                erl_syntax:clause(none, [
-                    erl_syntax:abstract(gen_dispatcher_mod(Id))
-                ])
-            ]
-        )
-        |
-        ModFuns
-    ],
+    Funs = [make_cb_fun(Id) | ModFuns],
     Forms = lists:flatten([
         erl_syntax:attribute(erl_syntax:atom(module), [erl_syntax:atom(Id)]),
         nklib_code:export_attr(Exports),
@@ -142,26 +133,23 @@ maybe_generate_mod(#{id:=Id}) ->
         {module, Id} -> true;
         _ -> false
     end,
-    case erlang:function_exported(Id, nkserver_dispatcher, 0) of
+    case erlang:function_exported(Id, nkserver_callback, 2) of
         true ->
             % Module has been compiled with parse_transform
             ok;
         false when Exists ->
             % Module exists, but has not been compiled with parse transform
+            lager:error("Module ~p compiled without required parse transform. "
+                        "Use -include_lib(\"nkserver/include/nkserver_callback.hrl\").",
+                        [Id]),
             {error, {invalid_callback_module, Id}};
         false ->
-            Forms = lists:flatten([
+            Forms = [
                 erl_syntax:attribute(erl_syntax:atom(module), [erl_syntax:atom(Id)]),
-                nklib_code:export_attr([{nkserver_dispatcher, 0}]),
-                erl_syntax:function(
-                    erl_syntax:atom(nkserver_dispatcher), [
-                        erl_syntax:clause(none, [
-                            erl_syntax:abstract(gen_dispatcher_mod(Id))
-                        ])
-                    ]
-                ),
+                nklib_code:export_attr([{nkserver_callback, 2}]),
+                make_cb_fun(Id),
                 erl_syntax:eof_marker()
-            ]),
+            ],
             Opts = [report_errors, report_warnings],
             {ok, _} = nklib_code:do_compile(Id, Forms, Opts),
             ok
@@ -179,10 +167,11 @@ make_module(#{id:=Id}=Service) ->
     PluginList = maps:get(expanded_plugins, Service),
     {PluginExported, PluginFuns} = make_plugin_funs(PluginList, Id),
     {CacheExported, CacheFuns} = make_cache_funs(Service),
-    AllFuns = ServiceFuns ++ PluginFuns ++ CacheFuns,
-    AllExported = ServiceExported ++ PluginExported ++ CacheExported,
+    {ExtraExported, ExtraFuns} = make_plugins_callbacks(Service),
+    AllFuns = ServiceFuns ++ PluginFuns ++ CacheFuns ++ ExtraFuns,
+    AllExported = ServiceExported ++ PluginExported ++ CacheExported ++ ExtraExported,
     ModForms = make_module(Id, AllExported, AllFuns),
-    DispatcherMod = gen_dispatcher_mod(Id),
+    DispatcherMod = gen_cb_mod(Id),
     case nkserver_app:get(save_dispatcher_source) of
         true ->
             Path = nkserver_app:get(log_path),
@@ -221,7 +210,7 @@ make_plugin_funs([Plugin|Rest], Id, Map) ->
                     make_plugin_funs(Rest, Id, Map);
                 List ->
                     % List of {Name, Arity} defined for this module
-                    List2 = nklib_util:remove_values([nkserver_dispatcher], List),
+                    List2 = nklib_util:remove_values([nkserver_callback], List),
                     Map2 = make_plugin_funs_deep(List2, Mod, Map),
                     make_plugin_funs(Rest, Id, Map2)
             end
@@ -272,10 +261,19 @@ make_cache_funs(#{config_cache:=Cache}) ->
     Funs = [nklib_code:getter_args(config_cache, 2, Values, undefined)],
     {[{config_cache, 2}], Funs}.
 
+%% @private
+make_plugins_callbacks(#{config_callbacks:=CBs}=_Config) ->
+    Export = [{Name, Arity} || {Name, Arity, _Syntax} <- CBs],
+    Funs = [Syntax || {_Name, _Arity, Syntax} <- CBs],
+    {Export, Funs};
+
+make_plugins_callbacks(_) ->
+    {[], []}.
+
 
 %% @private Generates the full module
 make_module(Id, Exported, Funs) ->
-    Mod = gen_dispatcher_mod(Id),
+    Mod = gen_cb_mod(Id),
     Attrs = [
         erl_syntax:attribute(erl_syntax:atom(module), [erl_syntax:atom(Mod)]),
         nklib_code:export_attr(Exported)
@@ -287,5 +285,27 @@ make_module(Id, Exported, Funs) ->
 
 
 %% @private
-gen_dispatcher_mod(Id) -> list_to_atom(atom_to_list(Id)++"_nkserver_dispatcher").
+gen_cb_mod(Id) -> list_to_atom(atom_to_list(Id)++"_callbacks_expanded").
+
+
+make_cb_fun(Id) ->
+    erl_syntax:function(
+        erl_syntax:atom(nkserver_callback),
+        [
+            erl_syntax:clause([
+                erl_syntax:variable("Fun"),
+                erl_syntax:variable("Args")
+            ],
+            [],
+            [
+                erl_syntax:application(
+                    erl_syntax:atom(apply),
+                    [
+                        erl_syntax:atom(gen_cb_mod(Id)),
+                        erl_syntax:variable("Fun"),
+                        erl_syntax:variable("Args")
+                    ])
+            ])
+        ]
+    ).
 
