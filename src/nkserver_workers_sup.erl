@@ -149,7 +149,7 @@ update_child(SrvId, #{id:=ChildId}=Spec, Opts) ->
 %% - If it is present but has a different Spec, it is restarted (see restart_delay)
 %% - You must use all fields in Spec for this to work!
 -spec update_child2(nkserver:id()|pid(), supervisor:child_spec(), update_opts()) ->
-    {added|upgraded|not_updated, pid()} | {error, term()}.
+    {ok, added|upgraded|not_updated, pid()} | {error, term()}.
 
 update_child2(SrvId, #{id:=ChildId}=Spec, Opts) ->
     Pid = get_pid(SrvId),
@@ -157,9 +157,9 @@ update_child2(SrvId, #{id:=ChildId}=Spec, Opts) ->
         {ok, Spec} ->
             case supervisor:start_child(Pid, Spec) of
                 {ok, ChildPid} ->
-                    {added, ChildPid};
+                    {ok, added, ChildPid};
                 {error, {already_started, ChildPid}} ->
-                    {not_updated, ChildPid};
+                    {ok, not_updated, ChildPid};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -170,7 +170,7 @@ update_child2(SrvId, #{id:=ChildId}=Spec, Opts) ->
                     timer:sleep(Delay),
                     case supervisor:start_child(Pid, Spec) of
                         {ok, ChildPid} ->
-                            {upgraded, ChildPid};
+                            {ok, upgraded, ChildPid};
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -180,7 +180,7 @@ update_child2(SrvId, #{id:=ChildId}=Spec, Opts) ->
         {error, not_found} ->
             case supervisor:start_child(Pid, Spec) of
                 {ok, ChildPid} ->
-                    {added, ChildPid};
+                    {ok, added, ChildPid};
                 {error, Error} ->
                     {error, Error}
             end
