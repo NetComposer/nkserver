@@ -64,8 +64,11 @@ msg(SrvId, Msg) ->
                 {Code, Reason} when is_binary(Code), is_binary(Reason) ->
                     {Code, Reason};
                 {Code, _} when is_atom(Code); is_binary(Code) ->
-                    lager:notice("NkSERVER unknown msg: ~p (~p)", [Msg, SrvId]),
-                    {to_bin(Code), to_bin(Code)};
+                    lager:info("NkSERVER unknown msg: ~p (~p)", [Msg, SrvId]),
+                    {to_bin(Code), <<>>};
+                Code when is_atom(Code); is_binary(Code) ->
+                    lager:info("NkSERVER unknown msg: ~p (~p)", [Msg, SrvId]),
+                    {to_bin(Code), <<>>};
                 Other ->
                     Ref = erlang:phash2(make_ref()) rem 10000,
                     lager:notice("NkSERVER unknown internal msg (~p): ~p (~p)", [Ref, Other, SrvId]),
