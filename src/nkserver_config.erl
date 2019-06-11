@@ -21,7 +21,7 @@
 -module(nkserver_config).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([config/2, get_plugin_mod/1, get_callback_mod/1]).
+-export([config/4, get_plugin_mod/1, get_callback_mod/1]).
 
 -include("nkserver.hrl").
 
@@ -31,12 +31,55 @@
 
 
 %% @doc
-config(Spec, OldService) ->
+config(SrvId, PkgClass, Opts, OldService) ->
     try
-        do_config(Spec, OldService)
+        case get_spec(SrvId, PkgClass, Opts) of
+            {ok, Spec} ->
+                do_config(Spec, OldService);
+            {error, Error} ->
+                {error, Error}
+        end
     catch
         throw:Throw ->
             Throw
+    end.
+
+
+
+-spec get_spec(nkserver:id(), nkserver:class(), nkserver:spec()) ->
+    {ok, nkserver:service()} | {error, term()}.
+
+get_spec(SrvId, PkgClass, Opts) ->
+    code:ensure_loaded(SrvId),
+    Opts2 = case erlang:function_exported(SrvId, config, 1) of
+        true ->
+            SrvId:config(Opts);
+        false ->
+            Opts
+    end,
+    Syntax = #{
+        uuid => binary,
+        plugins => {list, atom},
+        use_module => module,
+        use_master => boolean,
+        master_min_nodes => {integer, 0, none},
+        '__allow_unknown' => true
+    },
+    case nklib_syntax:parse(Opts2, Syntax) of
+        {ok, Opts3, _} ->
+            CoreOpts = [
+                uuid, plugins, use_module, use_master, master_min_nodes
+            ],
+            Opts4 = maps:with(CoreOpts, Opts3),
+            Config = maps:without(CoreOpts, Opts3),
+            Spec = Opts4#{
+                id => SrvId,
+                class => PkgClass,
+                config => Config
+            },
+            {ok, Spec};
+        {error, Error} ->
+            {error, Error}
     end.
 
 
@@ -95,16 +138,10 @@ do_config(#{id:=Id, class:=Class}=Spec, OldService) ->
 %% @private
 config_plugins(Service) ->
     #{id:=Id, class:=Class, plugins:=Plugins} = Service,
-    PkgMod = case nkserver_util:get_package_class_module(Class) of
-        undefined ->
-            throw({error, {package_class_invalid, Class}});
-        PkgMod0 ->
-            PkgMod0
-    end,
     % Plugins2 is the expanded list of plugins, first bottom, last top (Id)
-    Plugins2 = expand_plugins(Id, [PkgMod|Plugins]),
+    Plugins2 = expand_plugins(Id, [Class|Plugins]),
     ?SRV_LOG(debug, "starting configuration", [], Service),
-    Meta = nkserver_util:get_package_class_meta(Class),
+    Meta = get_meta(Class),
     Service2 = case Meta of
         #{use_master:=true} ->
             Service#{use_master := true};
@@ -228,6 +265,22 @@ get_callback_mod(Plugin) ->
     end.
 
 
+%% @private
+get_meta(Plugin) ->
+    case get_plugin_mod_check(Plugin) of
+        undefined ->
+            #{};
+        Module ->
+            case erlang:function_exported(Module, plugin_meta, 0) of
+                true ->
+                    Module:plugin_meta();
+                false ->
+                    #{}
+            end
+
+    end.
+
+
 %% @private Expands a list of plugins with their dependencies
 %% First in the returned list will be the higher-level plugins, last one
 %% will be 'nkserver' usually
@@ -270,12 +323,8 @@ add_group_deps([Plugin|Rest], Acc, Groups) when is_atom(Plugin) ->
     add_group_deps([{Plugin, []}|Rest], Acc, Groups);
 
 add_group_deps([{Plugin, Deps}|Rest], Acc, Groups) ->
-    Mod = get_plugin_mod(Plugin),
-    Group = case nklib_util:apply(Mod, plugin_group, []) of
-        not_exported -> undefined;
-        continue -> undefined;
-        Group0 -> Group0
-    end,
+    Meta = get_meta(Plugin),
+    Group = maps:get(group, Meta, undefined),
     case Group of
         undefined ->
             add_group_deps(Rest, [{Plugin, Deps}|Acc], Groups);

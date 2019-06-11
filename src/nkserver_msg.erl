@@ -35,7 +35,13 @@
 -spec is_msg(nkserver:id(), nkserver:msg()) ->
     {true, term(), term()} | false.
 
-is_msg(SrvId, Msg) ->
+is_msg(_SrvId, #{code:=Code}=Msg) ->
+    {true, get_msg_code(Code), to_bin(maps:get(reason, Msg, <<>>))};
+
+is_msg(_SrvId, #{<<"code">>:=Code}=Msg) ->
+    {true, get_msg_code(Code), to_bin(maps:get(<<"reason">>, Msg, <<>>))};
+
+is_msg(SrvId, Msg) when is_atom(Msg); is_tuple(Msg) ->
     case ?CALL_SRV(SrvId, msg, [SrvId, Msg]) of
         {Code, Fmt, List} when is_list(Fmt), is_list(List) ->
             {true, get_msg_code(Code), get_msg_fmt(Fmt, List)};
@@ -47,10 +53,18 @@ is_msg(SrvId, Msg) ->
             {true, get_msg_code(Msg), to_bin(Reason)};
         _ ->
             false
-    end.
+    end;
+
+is_msg(_, _) ->
+    false.
 
 
-%% @private
+
+
+%% @doc Expands a server message
+%% - First, if it is an atom or tuple, callback msg/1 is called for this service
+%% - If not, it is managed as a non-standard msg if it is valid nkserver:msg()
+%% - If it is not, a generic code is returned and an error is printed
 -spec msg(nkserver:id(), nkserver:msg()) ->
     {binary(), binary()}.
 
@@ -61,13 +75,16 @@ msg(SrvId, Msg) ->
         false ->
             % This msg is not in any table, but it can be an already processed one
             case Msg of
-                {Code, Reason} when is_binary(Code), is_binary(Reason) ->
-                    {Code, Reason};
-                {Code, _} when is_atom(Code); is_binary(Code) ->
-                    lager:info("NkSERVER unknown msg: ~p (~p)", [Msg, SrvId]),
+                Code when is_atom(Code); is_binary(Code); is_list(Code) ->
                     {to_bin(Code), <<>>};
-                Code when is_atom(Code); is_binary(Code) ->
-                    lager:info("NkSERVER unknown msg: ~p (~p)", [Msg, SrvId]),
+                {Code, Reason} when
+                    (is_atom(Code) orelse is_list(Code) orelse is_binary(Code)) andalso
+                    (is_atom(Reason) orelse is_list(Reason) orelse is_binary(Reason)) ->
+                    {to_bin(Code), to_bin(Reason)};
+                {Code, Map} when
+                    (is_atom(Code) orelse is_list(Code) orelse is_binary(Code)) andalso
+                    is_map(Map) ->
+                    % Lets add map fields
                     {to_bin(Code), <<>>};
                 Other ->
                     Ref = erlang:phash2(make_ref()) rem 10000,

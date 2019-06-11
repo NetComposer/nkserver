@@ -26,10 +26,12 @@
 -export([get_all_status/0, get_all_status/1]).
 -export([get_cached_config/3, get/2, get/3, put/3, put_new/3, del/2]).
 -export([get_config/1, get_plugins/1, get_uuid/1]).
--export_type([id/0, class/0, spec/0, service/0]).
+-export_type([id/0, class/0, spec/0, service/0, msg/0]).
 
 
 -include("nkserver.hrl").
+
+
 
 
 %% ===================================================================
@@ -38,7 +40,7 @@
 
 -type id() :: module().
 
--type class() :: binary().
+-type class() :: atom().
 
 -type config() :: map().
 
@@ -71,6 +73,15 @@
     }.
 
 
+% See nkserver_msg
+-type msg() ::
+    Code::atom()|binary()|string() |
+    {Code::atom() | binary() | string(), Reason::atom()|binary()|string()} |
+    #{
+        code => atom()|binary()|string(),
+        reason => atom()|binary()|string()
+    }.
+
 
 %% ===================================================================
 %% Public
@@ -81,18 +92,18 @@
 -spec start_link(class(), id(), spec()) ->
     {ok, pid()} | {error, term()}.
 
-start_link(PkgClass, SrvId, Spec) when is_atom(SrvId), is_map(Spec) ->
-    nkserver_srv_sup:start_link(nklib_util:to_binary(PkgClass), SrvId, Spec).
+start_link(PkgClass, SrvId, Spec) when is_atom(PkgClass), is_atom(SrvId), is_map(Spec) ->
+    nkserver_srv_sup:start_link(PkgClass, SrvId, Spec).
 
 
 %% @doc
 -spec get_sup_spec(class(), id(), spec()) ->
     {ok, pid()} | {error, term()}.
 
-get_sup_spec(PkgClass, SrvId, Spec) when is_atom(SrvId), is_map(Spec) ->
+get_sup_spec(PkgClass, SrvId, Spec) when is_atom(PkgClass), is_atom(SrvId), is_map(Spec) ->
     #{
         id => {nkserver, SrvId},
-        start => {?MODULE, start_link, [nklib_util:to_binary(PkgClass), SrvId, Spec]},
+        start => {?MODULE, start_link, [PkgClass, SrvId, Spec]},
         restart => permanent,
         shutdown => 15000,
         type => supervisor

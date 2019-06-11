@@ -33,15 +33,10 @@
 start_link(PkgClass, SrvId, Opts) ->
     case get_pid(SrvId) of
         undefined ->
-            case nkserver_util:get_spec(SrvId, PkgClass, Opts) of
-                {ok, Spec} ->
-                    case nkserver_config:config(Spec, #{}) of
-                        {ok, Service} ->
-                            ChildSpec = {{one_for_one, 10, 60}, get_childs(Service)},
-                            supervisor:start_link(?MODULE, {SrvId, ChildSpec});
-                        {error, Error} ->
-                            {error, Error}
-                    end;
+            case nkserver_config:config(SrvId, PkgClass, Opts, #{}) of
+                {ok, Service} ->
+                    ChildSpec = {{one_for_one, 10, 60}, get_childs(Service)},
+                    supervisor:start_link(?MODULE, {SrvId, ChildSpec});
                 {error, Error} ->
                     {error, Error}
             end;

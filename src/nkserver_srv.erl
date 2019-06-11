@@ -156,9 +156,8 @@ get_all_local() ->
 -spec get_all_local(nkserver:class()) ->
     [{id(), nkserver:class(), pid()}].
 
-get_all_local(Class) ->
-    Class2 = nklib_util:to_binary(Class),
-    [{SrvId, Hash, Pid} || {{SrvId, Hash}, Pid} <- nklib_proc:values({?MODULE, Class2})].
+get_all_local(Class) when is_atom(Class) ->
+    [{SrvId, Hash, Pid} || {{SrvId, Hash}, Pid} <- nklib_proc:values({?MODULE, Class})].
 
 
 %% @doc Gets all started services for a service
@@ -549,22 +548,17 @@ do_stop_plugins([Plugin|Rest], State) ->
 %% @private
 do_update(Opts, #state{id=SrvId, class=Class, service =Service}=State) ->
     #{class:=Class, hash:=OldHash} = Service,
-    case nkserver_util:get_spec(SrvId, Class, Opts) of
-        {ok, Spec} ->
-            case nkserver_config:config(Spec, Service) of
-                {ok, #{hash:=OldHash}} ->
-                    % Nothing has changed
-                    {ok, State};
-                {ok, NewService} ->
-                    case do_update_plugins(NewService, State) of
-                        ok ->
-                            init_srv(NewService),
-                            State2 = State#state{service = NewService},
-                            State3 = update_status(running, State2),
-                            {ok, State3};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
+    case nkserver_config:config(SrvId, Class, Opts, Service) of
+        {ok, #{hash:=OldHash}} ->
+            % Nothing has changed
+            {ok, State};
+        {ok, NewService} ->
+            case do_update_plugins(NewService, State) of
+                ok ->
+                    init_srv(NewService),
+                    State2 = State#state{service = NewService},
+                    State3 = update_status(running, State2),
+                    {ok, State3};
                 {error, Error} ->
                     {error, Error}
             end;

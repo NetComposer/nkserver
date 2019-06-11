@@ -26,7 +26,6 @@
 -export([name/1, parse_config/2]).
 -export([register_for_changes/1, notify_updated_service/1]).
 -export([get_net_ticktime/0, set_net_ticktime/2]).
--export([get_spec/3]).
 -export([handle_user_call/5]).
 
 -include("nkserver.hrl").
@@ -126,43 +125,6 @@ parse_config(Config, Syntax) ->
 %%                [SrvId, PackageId, Mod, Fun, Args, Class, CError, Trace]),
 %%            {[nil], St}
 %%    end.
-
-
--spec get_spec(nkserver:id(), nkserver:class(), nkserver:spec()) ->
-    {ok, nkserver:service()} | {error, term()}.
-
-get_spec(SrvId, PkgClass, Opts) ->
-    code:ensure_loaded(SrvId),
-    Opts2 = case erlang:function_exported(SrvId, config, 1) of
-        true ->
-            SrvId:config(Opts);
-        false ->
-            Opts
-    end,
-    Syntax = #{
-        uuid => binary,
-        plugins => {list, atom},
-        use_module => module,
-        use_master => boolean,
-        master_min_nodes => {integer, 0, none},
-        '__allow_unknown' => true
-    },
-    case nklib_syntax:parse(Opts2, Syntax) of
-        {ok, Opts3, _} ->
-            CoreOpts = [
-                uuid, plugins, use_module, use_master, master_min_nodes
-            ],
-            Opts4 = maps:with(CoreOpts, Opts3),
-            Config = maps:without(CoreOpts, Opts3),
-            Spec = Opts4#{
-                id => SrvId,
-                class => PkgClass,
-                config => Config
-            },
-            {ok, Spec};
-        {error, Error} ->
-            {error, Error}
-    end.
 
 
 %% @private

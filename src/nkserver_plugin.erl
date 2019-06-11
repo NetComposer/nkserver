@@ -21,7 +21,7 @@
 %% @doc Default callbacks for plugin definitions
 -module(nkserver_plugin).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([plugin_deps/0, plugin_group/0, plugin_config/3, plugin_cache/3,
+-export([plugin_deps/0, plugin_meta/0, plugin_config/3, plugin_cache/3,
           plugin_start/3, plugin_update/4, plugin_stop/3]).
 -export_type([continue/0]).
 
@@ -46,13 +46,16 @@
     [module() | {module(), optional}].
 
 
-%% @doc Optionally set the plugin 'group'
-%% All plugins within a group are added a dependency on the previous defined plugins
-%% in the same group.
-%% This way, the order of callbacks is the same as the order plugins are defined
-%% in this group.
--callback plugin_group() ->
-    term() | undefined.
+%% @doc Optionally set a number of parameters for the plugin
+%% Currently supported are:
+%% - group:
+%%      all plugins within a group are added a dependency on the previous defined plugins
+%%      in the same group. This way, the order of callbacks is the same as the order
+%%      plugins are defined in this group.
+%% - use_master:
+%%      boolean to set this plugin uses the plugin master
+-callback plugin_meta() ->
+    #{group=>term(), use_master=>boolean()} | undefined.
 
 
 %% @doc This function must parse any configuration for this plugin,
@@ -68,6 +71,8 @@
 %% processed, and before starting any service.
 %% The returned map is stored as an Erlang term inside the dispatcher module,
 %% and can be retrieved calling nkserver:get_config/3
+%% An undocumented third param can be used to add compiled callbacks,
+%% see nkactor_plugin
 -callback plugin_cache(id(), config(), service()) ->
     ok | {ok, map()} | {error, term()}.
 
@@ -108,8 +113,8 @@ plugin_deps() ->
 	[].
 
 
-plugin_group() ->
-	undefined.
+plugin_meta() ->
+	#{}.
 
 
 plugin_config(_Id, _Config, _Service) ->
