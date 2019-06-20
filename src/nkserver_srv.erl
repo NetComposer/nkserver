@@ -197,8 +197,7 @@ get_status_all() ->
 
 %% @doc Gets all instances in all nodes
 get_status_all(Class) ->
-    Class2 = nklib_util:to_binary(Class),
-    [Status || Status<- get_status_all(), {ok, Class2} == maps:find(class, Status)].
+    [Status || Status<- get_status_all(), {ok, Class} == maps:find(class, Status)].
 
 
 %% @doc Stops all started services
