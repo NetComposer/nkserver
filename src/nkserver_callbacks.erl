@@ -21,7 +21,7 @@
 %% @doc Default plugin callbacks
 -module(nkserver_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([msg/1, msg/2, i18n/3]).
+-export([i18n/3, status/1]).
 -export([srv_init/2, srv_handle_call/4, srv_handle_cast/3,
          srv_handle_info/3, srv_code_change/4, srv_terminate/3,
          srv_timed_check/2]).
@@ -60,52 +60,66 @@
 
 
 %% ===================================================================
-%% Errors Callbacks
+%% Status Callbacks
 %% ===================================================================
 
 
 %% @doc
--spec msg(nkserver:lang(), nkserver:msg()) ->
-    atom() |
-    tuple() |
-    list() |
-    {atom(), string()} |
-    {Fmt::string(), Vals::string()} |
-    {atom(), Fmt::string(), Vals::string()}.
+-spec status(nkserver:status()) ->
+    nkserver_status:desc_status() | continue.
 
-msg(SrvId, Msg) ->
-    ?CALL_SRV(SrvId, msg, [Msg]).
+status(auth_invalid) 	            -> {"Auth token is not valid", #{code=>400}};
+status(bad_request)                 -> {"Bad Request", #{code=>400}};
+status(conflict)                    -> {"Conflict", #{code=>409}};
+status(content_type_invalid)        -> {"ContentType is invalid", #{code=>400}};
+status({field_invalid, F})          -> {"Field '~s' is invalid", [F], #{code=>400, data=>#{field=>F}}};
+status({field_missing, F})          -> {"Field '~s' is missing", [F], #{code=>400, data=>#{field=>F}}};
+status({field_unknown, F})          -> {"Field '~s' is unknown", [F], #{code=>400, data=>#{field=>F}}};
+status(file_too_large)              -> {"File too large", #{code=>400}};
+status(forbidden)                   -> {"Forbidden", #{code=>403}};
+status(gone)                        -> {"Gone", #{code=>410}};
+status(internal_error)              -> {"Internal error", #{code=>500}};
+status({internal_error, Ref})	    -> {"Internal error: ~s", [Ref], #{code=>500, data=>#{ref=>Ref}}};
+status(invalid_parameters) 		    -> "Invalid parameters";
+status(leader_is_down)              -> "Service leader is down";
+status(method_not_allowed)          -> {"Method not allowed", #{code=>405}};
+status({module_failed, M})          -> {"Module '~s' failed", [M]};
+status({namespace_invalid, N})      -> {"Namespace '~s' is invalid", [N]};
+status({namespace_not_found, N})    -> {"Namespace '~s' not found", [N]};
+status(not_allowed)                 -> {"Not allowed", #{code=>409}};
+status(normal_termination) 		    -> "Normal termination";
+status(not_found)                   -> {"Not found", #{code=>404}};
+status(not_implemented) 		    -> "Not implemented";
+status(nkdomain)                    -> {"DNS Domain", #{code=>422}};
+status(ok)                          -> "OK";
+status(operation_invalid) 	        -> "Invalid operation";
+status(operation_token_invalid) 	-> "Operation token is invalid";
+status({parameter_invalid, T})      -> {"Invalid parameter '~s'", [T], #{code=>400, data=>#{parameter=>T}}};
+status({parameter_missing, T})      -> {"Missing parameter '~s'", [T], #{code=>400, data=>#{parameter=>T}}};
+status(parse_error)   		        -> "Object parse error";
+status(password_valid)              -> {"Password is valid", #{code=>200}};
+status(password_invalid) 	        -> {"Password is not valid", #{code=>200}};
+status(process_down)  			    -> "Process failed";
+status(process_not_found) 		    -> "Process not found";
+status(redirect)                    -> {"Redirect", #{code=>307}};
+status(request_body_invalid)        -> {"The request body is invalid", #{code=>400}};
+status(resource_invalid)            -> {"Invalid resource", #{code=>404}};
+status({resource_invalid, R})       -> {"Invalid resource '~s'", [R], #{code=>200, data=>#{resource=>R}}};
+status({resource_invalid, G, R})    -> {"Invalid resource '~s' (~s)", [R, G], #{code=>200, data=>#{resource=>R, group=>G}}};
+status(service_not_found) 		    -> "Service not found";
+status(service_down)                -> "Service is down";
+status({service_not_available, S})  -> {"Service '~s' not available", [S], #{code=>422, data=>#{service=>S}}};
+status({syntax_error, F})           -> {"Syntax error: ~s", [F], #{code=>400, data=>#{field=>F}}};
+status({tls_alert, Txt}) 			-> {"Error TTL: ~s", [Txt]};
+status(timeout)                     -> {"Timeout", #{code=>504}};
+status(too_many_records)            -> {"Too many records", #{code=>504}};
+status(too_many_requests)           -> {"Too many requests", #{code=>429}};
+status(unauthorized)                -> {"Unauthorized", #{code=>401}};
+status(unprocessable)               -> {"Unprocessable", #{code=>422}};
+status(utf8_error)                  -> {"UTF8 error", #{code=>400}};
+status(verb_not_allowed)            -> {"Verb is not allowed", #{code=>405}};
+status(_)   		                 -> continue.
 
-
-%% @doc
--spec msg(nkserver:msg()) ->
-    atom() |
-    tuple() |
-    list() |
-    {atom(), string()} |
-    {Fmt::string(), Vals::string()} |
-    {atom(), Fmt::string(), Vals::string()}.
-
-msg({field_missing, Txt})	        -> {"Missing field: '~s'", [Txt]};
-msg({field_invalid, Txt})	        -> {"Field '~s' is invalid", [Txt]};
-msg({field_unknown, Txt})	        -> {"Unknown field: '~s'", [Txt]};
-msg(file_read_error)   		        -> "File read error";
-msg(internal_error)			        -> "Internal error";
-msg({internal_error, Ref})	        -> {"Internal error: ~s", [Ref]};
-msg(invalid_parameters) 		    -> "Invalid parameters";
-msg(leader_is_down)                 -> "Service leader is down";
-msg(normal_termination) 		    -> "Normal termination";
-msg(not_found) 				        -> "Not found";
-msg(not_implemented) 		        -> "Not implemented";
-msg(ok)                             -> "OK";
-msg(process_down)  			        -> "Process failed";
-msg(process_not_found) 		        -> "Process not found";
-msg(service_not_found) 		        -> "Service not found";
-msg({syntax_error, Txt})		    -> {"Syntax error: '~s'", [Txt]};
-msg({tls_alert, Txt}) 			    -> {"Error TTL: ~s", [Txt]};
-msg(timeout) 				        -> "Timeout";
-msg(unauthorized) 			        -> "Unauthorized";
-msg(_)   		                    -> continue.
 
 
 %% ===================================================================

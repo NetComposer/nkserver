@@ -26,7 +26,7 @@
 -export([get_all_status/0, get_all_status/1]).
 -export([get_cached_config/3, get/2, get/3, put/3, put_new/3, del/2]).
 -export([get_config/1, get_plugins/1, get_uuid/1]).
--export_type([id/0, class/0, spec/0, service/0, msg/0]).
+-export_type([id/0, class/0, spec/0, service/0, status/0]).
 
 
 -include("nkserver.hrl").
@@ -73,15 +73,7 @@
     }.
 
 
-% See nkserver_msg
--type msg() ::
-    Code::atom()|binary()|string() |
-    {Code::atom() | binary() | string(), Reason::atom()|binary()|string()} |
-    #{
-        code => atom()|binary()|string(),
-        reason => atom()|binary()|string()
-    }.
-
+-type status() :: nkserver_status:status().
 
 %% ===================================================================
 %% Public
