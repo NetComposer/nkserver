@@ -73,7 +73,7 @@
     }.
 
 
--type status() :: nkserver_status:status().
+-type status() :: nkserver_status:user_status().
 
 %% ===================================================================
 %% Public
