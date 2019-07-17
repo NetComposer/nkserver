@@ -119,6 +119,7 @@ status(unauthorized)                -> {"Unauthorized", #{code=>401}};
 status(unprocessable)               -> {"Unprocessable", #{code=>422}};
 status(utf8_error)                  -> {"UTF8 error", #{code=>400}};
 status(verb_not_allowed)            -> {"Verb is not allowed", #{code=>405}};
+status(version_not_allowed)         -> {"Version not allowed", #{code=>422}};
 status(_)   		                 -> continue.
 
 
