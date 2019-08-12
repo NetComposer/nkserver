@@ -50,7 +50,7 @@
 
 %% @doc Expands a server message
 %% - First, if it is an atom or tuple, callback msg/1 is called for this service
-%% - If not, it is managed as a non-standard msg if it is valid nkserver:msg()
+%% - If not, it is managed as a non-standard msg if it is valid nkserver:status()
 %% - If it is not, a generic code is returned and an error is printed
 -spec status(nkserver:id(), user_status()) ->
     expanded_status().
@@ -65,7 +65,8 @@ status(SrvId, UserStatus) ->
                     #{status => to_bin(UserStatus)};
                 {Status, Info} when
                     (is_atom(Status) orelse is_list(Status) orelse is_binary(Status))
-                    andalso (is_list(Info) orelse is_binary(Info)) ->
+                    andalso (is_list(Info) orelse is_binary(Info))
+                    andalso Status /= undef ->
                     #{status => to_bin(Status), info => to_bin(Info)};
                 _ ->
                     Ref = erlang:phash2(make_ref()) rem 10000,
