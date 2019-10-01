@@ -63,15 +63,31 @@ status(SrvId, UserStatus) ->
             case UserStatus of
                 _ when is_atom(UserStatus); is_binary(UserStatus); is_list(UserStatus) ->
                     #{status => to_bin(UserStatus)};
+                {Status, _} when
+                    Status==badarg;
+                    Status==badarith;
+                    Status==function_clause;
+                    Status==if_clause;
+                    Status==undef;
+                    Status==timeout_value;
+                    Status==noproc;
+                    Status==system_limit ->
+                        status_internal(SrvId, UserStatus);
+                {{Status, _}, _} when
+                    Status==badmatch;
+                    Status==case_clause;
+                    Status==try_clause;
+                    Status==badfun;
+                    Status==badarity;
+                    Status==nocatch ->
+                    status_internal(SrvId, UserStatus);
                 {Status, Info} when
                     (is_atom(Status) orelse is_list(Status) orelse is_binary(Status))
                     andalso (is_list(Info) orelse is_binary(Info))
                     andalso Status /= undef ->
                     #{status => to_bin(Status), info => to_bin(Info)};
                 _ ->
-                    Ref = erlang:phash2(make_ref()) rem 10000,
-                    lager:notice("NkSERVER unknown internal status (~p): ~p (~p)", [Ref, UserStatus, SrvId]),
-                    Info = to_fmt("Internal reference (~p)", [Ref]),
+                    #{info:=Info} = status_internal(SrvId, UserStatus),
                     case is_tuple(UserStatus) andalso size(UserStatus) > 0 andalso element(1, UserStatus) of
                         Status when is_atom(Status); is_binary(Status); is_list(Status) ->
                             #{status => to_bin(Status), info => Info};
@@ -81,6 +97,13 @@ status(SrvId, UserStatus) ->
             end
     end.
 
+
+%% @private
+status_internal(SrvId, UserStatus) ->
+    Ref = erlang:phash2(make_ref()) rem 10000,
+    lager:notice("NkSERVER unknown internal status (~p): ~p (~p)", [Ref, UserStatus, SrvId]),
+    Info = to_fmt("Internal reference (~p)", [Ref]),
+    #{status => <<"unknown_error">>, info=>Info}.
 
 
 %% @private
