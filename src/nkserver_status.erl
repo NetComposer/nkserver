@@ -21,7 +21,7 @@
 -module(nkserver_status).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_defined/2, status/2]).
+-export([get_defined/2, extended_status/2, status/2]).
 -export_type([user_status/0, desc_status/0, expanded_status/0]).
 -include("nkserver.hrl").
 
@@ -52,6 +52,29 @@
 %% - First, if it is an atom or tuple, callback msg/1 is called for this service
 %% - If not, it is managed as a non-standard msg if it is valid nkserver:status()
 %% - If it is not, a generic code is returned and an error is printed
+-spec extended_status(nkserver:id(), user_status()) ->
+    expanded_status().
+
+extended_status(SrvId, UserStatus) ->
+    case get_defined(SrvId, UserStatus) of
+        {true, ExpandedStatus} ->
+            ExpandedStatus;
+        false ->
+            case UserStatus of
+                _ when is_atom(UserStatus); is_binary(UserStatus); is_list(UserStatus) ->
+                    #{status => to_bin(UserStatus)};
+                {Status, Info} when
+                    (is_atom(Status) orelse is_list(Status) orelse is_binary(Status)) ->
+                    #{status => to_bin(Status), info => to_bin(Info)};
+                {{Status, _Sub}, _Info} when is_atom(Status) ->
+                    #{status => to_bin(Status), info => to_bin(UserStatus)};
+                _ ->
+                    #{status => <<"unknown_error">>, info=>to_bin(UserStatus)}
+            end
+    end.
+
+
+%% @doc Expands a server message like extended_status, but unknown errors are masked
 -spec status(nkserver:id(), user_status()) ->
     expanded_status().
 
@@ -72,7 +95,7 @@ status(SrvId, UserStatus) ->
                     Status==timeout_value;
                     Status==noproc;
                     Status==system_limit ->
-                        status_internal(SrvId, UserStatus);
+                    status_internal(SrvId, UserStatus);
                 {{Status, _}, _} when
                     Status==badmatch;
                     Status==case_clause;

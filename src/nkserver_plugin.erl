@@ -120,8 +120,17 @@ plugin_meta() ->
 plugin_config(_Id, _Config, _Service) ->
     ok.
 
-plugin_cache(_Id, _Config, _Service) ->
-    ok.
+plugin_cache(_Id, Config, _Service) ->
+    Syntax = #{debug=>boolean},
+    case nklib_syntax:parse_all(Config, Syntax) of
+        {ok, Parsed} ->
+            Cache = #{
+                debug => maps:get(debug, Parsed, false)
+            },
+            {ok, Cache};
+        _ ->
+            ok
+    end.
 
 
 plugin_start(_Id, _Config, _Service) ->
