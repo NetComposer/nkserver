@@ -19,7 +19,7 @@
 %% -------------------------------------------------------------------
 
 
-%% @doc These functions are useful if nkserver_ot and nkaudit are installed
+%% @doc These functions are useful if nkserver_ot and nkserver_audit are installed
 
 -module(nkserver_trace).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
@@ -33,7 +33,7 @@
 
 -type run_opts() ::
 #{
-    base_audit => nkaudit:audit(),
+    base_audit => nkserver_audit:audit(),
     base_txt => string(),
     base_args => list
 }.
@@ -46,7 +46,7 @@
     base_txt :: string(),
     base_args :: list(),
     audit_srv :: nkserver:id() | undefined,
-    base_audit :: nkaudit:audit() | undefined
+    base_audit :: nkserver_audit:audit() | undefined
 }).
 
 %% @doc Runs a function into a traced environment
@@ -79,7 +79,7 @@ start(SrvId, SpanId, SpanName, Fun, Opts) ->
         base_args = Args,
         base_audit = #{}
     },
-    Record2 = case nkserver:get_cached_config(SrvId, nkaudit, audit_srv) of
+    Record2 = case nkserver:get_cached_config(SrvId, nkserver_audit, audit_srv) of
         undefined ->
             Record1;
         AuditSrv ->
@@ -117,7 +117,7 @@ start(SrvId, SpanId, SpanName, Fun, Opts) ->
                         level => warning,
                         data => ExtStatus
                     },
-                    nkaudit_sender:store(AuditSrv2, Audit);
+                    nkserver_audit_sender:store(AuditSrv2, Audit);
                 _ ->
                     ok
             end,
@@ -258,7 +258,7 @@ status(SpanId, Level, Error) ->
                 id => Status,
                 msg => maps:get(info, ExtStatus)
             },
-            nkaudit_sender:store(AuditSrv, Audit2)
+            nkserver_audit_sender:store(AuditSrv, Audit2)
     end.
 
 
@@ -295,7 +295,7 @@ tags(SpanId, Tags) ->
                 level => info,
                 data => Tags
             },
-            nkaudit_sender:store(AuditSrv, Audit2)
+            nkserver_audit_sender:store(AuditSrv, Audit2)
     end.
 
 
@@ -303,7 +303,7 @@ tags(SpanId, Tags) ->
 %% - It is send to the span as json
 %% - It is printed in screen
 %% - It is sent to audit, merging it
--spec trace(any(), nkaudit:audit()) ->
+-spec trace(any(), nkserver_audit:audit()) ->
     ok.
 
 trace(SpanId, Audit) ->
@@ -328,7 +328,7 @@ trace(SpanId, Audit) ->
         undefined ->
             ok;
         _ ->
-            nkaudit_sender:store(AuditSrv, Audit2)
+            nkserver_audit_sender:store(AuditSrv, Audit2)
     end.
 
 
@@ -373,6 +373,6 @@ log(SpanId, Level, Txt, Args) ->
                 level => Level,
                 msg => list_to_binary(io_lib:format(Txt, Args))
             },
-            nkaudit_sender:store(AuditSrv, Audit)
+            nkserver_audit_sender:store(AuditSrv, Audit)
     end.
 
