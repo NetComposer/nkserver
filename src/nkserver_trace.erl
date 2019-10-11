@@ -59,11 +59,22 @@
 %%      - An audit with group 'nkserver_error' is generated, level warning
 %% - During process, can call log/4, error/3 and tags/3
 
+
+%% @doc
+has_ot(SrvId) ->
+    nkserver:get_cached_config(SrvId, nkserver_ot, activated) == true.
+
+
+%% @doc
+audit_srv(SrvId) ->
+    nkserver:get_cached_config(SrvId, nkserver_audit, audit_srv).
+
+
 -spec start(nkserver:id(), term(), string()|binary(), function(), run_opts()) ->
     any().
 
 start(SrvId, SpanId, SpanName, Fun, Opts) ->
-    Span = case nkserver:get_cached_config(SrvId, nkserver_ot, activated) of
+    Span = case has_ot(SrvId) of
         true ->
             nkserver_ot:new(SpanId, SrvId, SpanName);
         false ->
@@ -79,7 +90,7 @@ start(SrvId, SpanId, SpanName, Fun, Opts) ->
         base_args = Args,
         base_audit = #{}
     },
-    Record2 = case nkserver:get_cached_config(SrvId, nkserver_audit, audit_srv) of
+    Record2 = case audit_srv(SrvId) of
         undefined ->
             Record1;
         AuditSrv ->
