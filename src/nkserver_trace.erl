@@ -42,6 +42,7 @@
 
 -record(nkserver_trace, {
     srv :: nkserver:id(),
+    trace :: binary(),
     has_ot :: boolean(),
     base_txt :: string(),
     base_args :: list(),
@@ -80,8 +81,14 @@ start(SrvId, SpanId, SpanName, Fun, Opts) ->
         false ->
             undefined
     end,
-    Txt = maps:get(base_txt, Opts, "NkSERVER trace "),
-    Args = maps:get(base_args,  Opts, []),
+    Trace = case Span of
+        undefined ->
+            nklib_util:luid();
+        _ ->
+            nkserver_ot:trace_id_hex(Span)
+    end,
+    Txt = maps:get(base_txt, Opts, "NkSERVER ") ++ "(trace:~s) ",
+    Args = maps:get(base_args,  Opts, []) ++ [Trace],
     BaseAudit = maps:get(base_audit,  Opts, #{}),
     Record1 = #nkserver_trace{
         srv = SrvId,
@@ -94,13 +101,8 @@ start(SrvId, SpanId, SpanName, Fun, Opts) ->
         undefined ->
             Record1;
         AuditSrv ->
-            Trace = case Span of
-                undefined ->
-                    nklib_util:luid();
-                _ ->
-                    nkserver_ot:trace_id_hex(Span)
-            end,
             Record1#nkserver_trace{
+                trace = Trace,
                 audit_srv = AuditSrv,
                 base_audit = BaseAudit#{app=>SrvId, trace=>Trace}
             }
@@ -116,7 +118,7 @@ start(SrvId, SpanId, SpanName, Fun, Opts) ->
                 _ ->
                     nkserver_ot:tag_error(SpanId, {Class, {Reason, Stack}})
             end,
-            lager:warning("NkSERVER trace error ~p (~p, ~p)", [Class, Reason, Stack]),
+            lager:warning("NkSERVER trace (~s) error ~p (~p, ~p)", [Trace, Class, Reason, Stack]),
             case Record2 of
                 #nkserver_trace{audit_srv=AuditSrv2, base_audit=BaseAudit2}
                     when AuditSrv2 /= undefined ->
@@ -327,19 +329,20 @@ trace(SpanId, Audit) ->
         base_audit = BaseAudit
     } = TraceInfo,
     Audit2 = maps:merge(BaseAudit, Audit),
-    Json = nklib_json:encode(Audit2),
+    {ok, [Audit3]} = nkserver_audit:parse(Audit2),
+    Json = nklib_json:encode(Audit3),
     case HasOT of
         true ->
-            nkserver_ot:log(SpanId, Json);
+            nkserver_ot:log(SpanId, <<"audit_data: ", Json/binary>>);
         false ->
             ok
     end,
-    lager:log(info, [], BaseTxt++"trace ~s", BaseArgs++[Json]),
+    lager:log(info, [], BaseTxt++"audit ~s", BaseArgs++[Json]),
     case AuditSrv of
         undefined ->
             ok;
         _ ->
-            nkserver_audit_sender:store(AuditSrv, Audit2)
+            nkserver_audit_sender:do_store(AuditSrv, Audit3)
     end.
 
 
