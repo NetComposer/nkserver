@@ -44,6 +44,7 @@
     srv :: nkserver:id(),
     trace :: binary(),
     has_ot :: boolean(),
+    has_audit :: boolean(),
     base_txt :: string(),
     base_args :: list(),
     audit_srv :: nkserver:id() | undefined,
@@ -89,25 +90,20 @@ start(SrvId, SpanId, SpanName, Fun, Opts) ->
     end,
     Txt = maps:get(base_txt, Opts, "NkSERVER ") ++ "(trace:~s) ",
     Args = maps:get(base_args,  Opts, []) ++ [Trace],
-    BaseAudit = maps:get(base_audit,  Opts, #{}),
-    Record1 = #nkserver_trace{
+    BaseAudit1 = maps:get(base_audit, Opts, #{}),
+    BaseAudit2 = BaseAudit1#{app=>SrvId, trace=>Trace},
+    AuditSrv = audit_srv(SrvId),
+    Record = #nkserver_trace{
         srv = SrvId,
+        trace = Trace,
         has_ot = Span /= undefined,
+        has_audit = AuditSrv /= undefined,
+        audit_srv = AuditSrv,
         base_txt = Txt,
         base_args = Args,
-        base_audit = #{}
+        base_audit = BaseAudit2
     },
-    Record2 = case audit_srv(SrvId) of
-        undefined ->
-            Record1;
-        AuditSrv ->
-            Record1#nkserver_trace{
-                trace = Trace,
-                audit_srv = AuditSrv,
-                base_audit = BaseAudit#{app=>SrvId, trace=>Trace}
-            }
-    end,
-    put({SpanId, nkserver_trace}, Record2),
+    put({SpanId, nkserver_trace}, Record),
     try
         Fun()
     catch
@@ -119,9 +115,8 @@ start(SrvId, SpanId, SpanName, Fun, Opts) ->
                     nkserver_ot:tag_error(SpanId, {Class, {Reason, Stack}})
             end,
             lager:warning("NkSERVER trace (~s) error ~p (~p, ~p)", [Trace, Class, Reason, Stack]),
-            case Record2 of
-                #nkserver_trace{audit_srv=AuditSrv2, base_audit=BaseAudit2}
-                    when AuditSrv2 /= undefined ->
+            case Record of
+                #nkserver_trace{has_audit=true, audit_srv=AuditSrv2, base_audit=BaseAudit2} ->
                     ExtStatus = nkserver_status:extended_status(SrvId, {Class, {Reason, Stack}}),
                     Audit = BaseAudit2#{
                         group => nkserver,
@@ -247,6 +242,7 @@ status(SpanId, Level, Error) ->
     #nkserver_trace{
         srv = SrvId,
         has_ot = HasOT,
+        has_audit = HasAudit,
         base_txt = BaseTxt,
         base_args = BaseArgs,
         audit_srv = AuditSrv,
@@ -260,10 +256,8 @@ status(SpanId, Level, Error) ->
     end,
     ExtStatus = #{status:=Status, info:=Info} = nkserver_status:extended_status(SrvId, Error),
     lager:log(Level, [], BaseTxt++"status ~s (~s)", BaseArgs++[Status, Info]),
-    case AuditSrv of
-        undefined ->
-            ok;
-        _ ->
+    case HasAudit of
+        true ->
             Audit2 = BaseAudit#{
                 group => nkserver,
                 type => error,
@@ -271,7 +265,9 @@ status(SpanId, Level, Error) ->
                 id => Status,
                 msg => maps:get(info, ExtStatus)
             },
-            nkserver_audit_sender:store(AuditSrv, Audit2)
+            nkserver_audit_sender:store(AuditSrv, Audit2);
+        false ->
+            ok
     end.
 
 
@@ -286,6 +282,7 @@ tags(SpanId, Tags) ->
     TraceInfo = get({SpanId, nkserver_trace}),
     #nkserver_trace{
         has_ot = HasOT,
+        has_audit = HasAudit,
         base_txt = BaseTxt,
         base_args = BaseArgs,
         audit_srv = AuditSrv,
@@ -298,17 +295,17 @@ tags(SpanId, Tags) ->
             ok
     end,
     lager:log(info, [], BaseTxt++"tags ~p", BaseArgs++[Tags]),
-    case AuditSrv of
-        undefined ->
-            ok;
-        _ ->
+    case HasAudit of
+        true ->
             Audit2 = BaseAudit#{
                 group => nkserver,
                 type => tags,
                 level => info,
                 data => Tags
             },
-            nkserver_audit_sender:store(AuditSrv, Audit2)
+            nkserver_audit_sender:store(AuditSrv, Audit2);
+        false ->
+            ok
     end.
 
 
@@ -323,6 +320,7 @@ trace(SpanId, Audit) ->
     TraceInfo = get({SpanId, nkserver_trace}),
     #nkserver_trace{
         has_ot = HasOT,
+        has_audit = HasAudit,
         base_txt = BaseTxt,
         base_args = BaseArgs,
         audit_srv = AuditSrv,
@@ -338,11 +336,11 @@ trace(SpanId, Audit) ->
             ok
     end,
     lager:log(info, [], BaseTxt++"audit ~s", BaseArgs++[Json]),
-    case AuditSrv of
-        undefined ->
-            ok;
-        _ ->
-            nkserver_audit_sender:do_store(AuditSrv, Audit3)
+    case HasAudit of
+        true ->
+            nkserver_audit_sender:do_store(AuditSrv, Audit3);
+        false ->
+            ok
     end.
 
 
@@ -365,6 +363,7 @@ log(SpanId, Level, Txt, Args) ->
     TraceInfo = get({SpanId, nkserver_trace}),
     #nkserver_trace{
         has_ot = HasOT,
+        has_audit = HasAudit,
         base_txt = BaseTxt,
         base_args = BaseArgs,
         audit_srv = AuditSrv,
@@ -377,16 +376,16 @@ log(SpanId, Level, Txt, Args) ->
             ok
     end,
     lager:log(Level, [], BaseTxt++Txt, BaseArgs++Args),
-    case AuditSrv of
-        undefined ->
-            ok;
-        _ ->
+    case HasAudit of
+        true ->
             Audit = BaseAudit#{
                 group => nkserver,
                 type => log,
                 level => Level,
                 msg => list_to_binary(io_lib:format(Txt, Args))
             },
-            nkserver_audit_sender:store(AuditSrv, Audit)
+            nkserver_audit_sender:store(AuditSrv, Audit);
+        false ->
+            ok
     end.
 
