@@ -20,8 +20,10 @@
 %% -------------------------------------------------------------------
 
 %% @doc When option 'use_master' is used, this server is started at each node,
-%% managed by the server's process, one of them will become 'master'
-
+%% managed by the server's process, one of them will become 'leader'
+%%
+%% Each 5 seconds, we check that that the leader is set
+%% and callback srv_master_timer_check/1 is called
 
 -module(nkserver_master).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
@@ -321,6 +323,7 @@ handle(Fun, Args, #state{id=SrvId, user_state=UserState}=State) ->
 %% Standard strategy for min nodes
 %% ===================================================================
 
+%% Called from srv_master_become_leader by default
 strategy_min_nodes(SrvId) ->
     MinNodes = ?CALL_SRV(SrvId, master_min_nodes, []),
     Nodes = length(nodes()),
