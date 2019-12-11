@@ -68,6 +68,8 @@ extended_status(SrvId, UserStatus) ->
                     #{status => to_bin(Status), info => to_bin(Info)};
                 {{Status, _Sub}, _Info} when is_atom(Status) ->
                     #{status => to_bin(Status), info => to_bin(UserStatus)};
+                #{status:=_Status} ->
+                    UserStatus;
                 _ ->
                     #{status => <<"unknown_error">>, info=>to_bin(UserStatus)}
             end
@@ -109,6 +111,8 @@ status(SrvId, UserStatus) ->
                     andalso (is_list(Info) orelse is_binary(Info))
                     andalso Status /= undef ->
                     #{status => to_bin(Status), info => to_bin(Info)};
+                #{status:=_} ->
+                    UserStatus;
                 _ ->
                     #{info:=Info} = status_internal(SrvId, UserStatus),
                     case is_tuple(UserStatus) andalso size(UserStatus) > 0 andalso element(1, UserStatus) of
