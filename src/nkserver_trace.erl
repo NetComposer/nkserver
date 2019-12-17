@@ -53,58 +53,80 @@
 
 
 
+
+%%%% @doc
+%%-spec run(nkserver:id(), term(), fun(), parent()) ->
+%%    term().
 %%
-%%-spec run(nkserver:id(), id(), fun(), parent()) -> term().
-%%
-%%run(SrvId, TraceId, Fun, Parent) ->
-%%    Id = ?CALL_SRV(SrvId, trace_create, [SrvId, TraceId, Parent],
-%%    Trace = {trace, SrvId, Id},
-%%    try
-%%        Fun(Trace)
-%%    catch
-%%        Class:Reason:Stack ->
-%%            Text = io_lib:format("Exception ~p: ~p (~p)", [Class, Reason, Stack]),
-%%            log(Trace, trace_exception, #{error: Text}),
-%%            erlang:raise(Class, Reason, Stack)
-%%    after
-%%        finish(Trace)
+%%run(SrvId, Id, Fun, Parent) ->
+%%    case ?CALL_SRV(SrvId, trace_create, [SrvId, Id, Parent]) of
+%%        {ok, TraceId} ->
+%%            Trace = {trace, SrvId, TraceId},
+%%            try
+%%                Fun(Trace)
+%%            catch
+%%                Class:Reason:Stack ->
+%%                    Text = io_lib:format("Exception ~p: ~p (~p)", [Class, Reason, Stack]),
+%%                    log(Trace, trace_exception, #{error => list_to_binary(Text)}),
+%%                    erlang:raise(Class, Reason, Stack)
+%%            after
+%%                finish(Trace)
+%%            end;
+%%        {error, Error} ->
+%%            {error, Error}
 %%    end.
 %%
 %%
 %%%% @doc Finishes a started trace. You don't need to call it directly
-%%-spec finish(trace())) -> any().
+%%-spec finish(trace()) ->
+%%    any().
 %%
-%%finish({trace, SrvId, TraceId}) -> ?CALL_SRV(SrvId, trace_finish, [SrvId, TraceId]).
+%%finish({trace, SrvId, TraceId}) ->
+%%    ?CALL_SRV(SrvId, trace_finish, [SrvId, TraceId]).
+%%
 %%
 %%%% @doc Generates a new trace entry
-%%-spec log(trace(), term(), map()) -> any().
+%%-spec log(trace(), term(), map()) ->
+%%    any().
 %%
 %%log({trace, SrvId, TraceId}, Op, Opts) ->
-%%    lagger:error("DO LOG: ~p", [TraceId]),
+%%    %lagger:error("DO LOG: ~p", [TraceId]),
 %%    ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Op, Opts]).
 %%
-%%def log(nil, _op, _opts), do: nil
 %%
 %%%% @doc Adds a number of tags to a trace
-%%-spec tags(trace, list) -> any.
-%%def tags({:trace, SrvId, TraceId}, tags),
-%%do: Services.Util.callback(SrvId, :trace_tags, [SrvId, TraceId, tags])
+%%-spec tags(trace(), map()) ->
+%%    any().
 %%
-%%def tags(nil, _tags), do: nil
+%%tags({trace, SrvId, TraceId}, Tags) ->
+%%    ?CALL_SRV(SrvId, trace_tags, [SrvId, TraceId, Tags]).
+%%
 %%
 %%%% @doc Generates a new trace as child of an existing one
-%%-spec make_parent(trace) -> any.
-%%def make_parent({:trace, SrvId, TraceId}) -> ?CALL_SRV(SrvId, trace_child, [SrvId, TraceId]).
+%%-spec make_parent(trace()) ->
+%%    trace().
 %%
-%%def make_parent(nil), do: nil
+%%make_parent({trace, SrvId, TraceId}) ->
+%%    ?CALL_SRV(SrvId, trace_child, [SrvId, TraceId]).
 %%
-%%def default_create(_SrvId, trace_id), do: {:default, trace_id}
 %%
-%%def default_finish(SrvId, trace_id),
-%%do: default_log(SrvId, trace_id, :trace_finished, [])
+%%default_create(_SrvId, Id) ->
+%%    {default, Id}.
 %%
-%%def default_log(SrvId, {:default, name}, op, opts) do
-%%msg =
+%%default_finish(SrvId, Id) ->
+%%    default_log(SrvId, Id, trace_finished, #{}).
+%%
+%%
+%%default_log(SrvId, {default, Name}, Op, Opts) ->
+%%    Msg = list_to_binary([
+%%        Name,
+%%        " (", nklib_util:to_binary(SrvId), "): ",
+%%        nklib_util:to_binary(Op), " ",
+%%
+%%
+%%
+%%
+%%    ])
 %%"#{name} (#{SrvId}): #{op}" <>
 %%case opts do
 %%[] -> ""
@@ -131,8 +153,8 @@
 %%
 %%
 %%
-
-
+%%
+%%
 
 
 
