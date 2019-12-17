@@ -26,7 +26,7 @@
 -export([start/5, debug/2, debug/3, info/2, info/3, notice/2, notice/3, warning/2, warning/3]).
 -export([trace/2, error/2, error/3, tags/2, status/3, log/3, log/4]).
 
-
+-include("nkserver.hrl").
 %% ===================================================================
 %% Public
 %% ===================================================================
@@ -50,6 +50,101 @@
     audit_srv :: nkserver:id() | undefined,
     base_audit :: nkserver_audit:audit() | undefined
 }).
+
+
+
+%%
+%%-spec run(nkserver:id(), id(), fun(), parent()) -> term().
+%%
+%%run(SrvId, TraceId, Fun, Parent) ->
+%%    Id = ?CALL_SRV(SrvId, trace_create, [SrvId, TraceId, Parent],
+%%    Trace = {trace, SrvId, Id},
+%%    try
+%%        Fun(Trace)
+%%    catch
+%%        Class:Reason:Stack ->
+%%            Text = io_lib:format("Exception ~p: ~p (~p)", [Class, Reason, Stack]),
+%%            log(Trace, trace_exception, #{error: Text}),
+%%            erlang:raise(Class, Reason, Stack)
+%%    after
+%%        finish(Trace)
+%%    end.
+%%
+%%
+%%%% @doc Finishes a started trace. You don't need to call it directly
+%%-spec finish(trace())) -> any().
+%%
+%%finish({trace, SrvId, TraceId}) -> ?CALL_SRV(SrvId, trace_finish, [SrvId, TraceId]).
+%%
+%%%% @doc Generates a new trace entry
+%%-spec log(trace(), term(), map()) -> any().
+%%
+%%log({trace, SrvId, TraceId}, Op, Opts) ->
+%%    lagger:error("DO LOG: ~p", [TraceId]),
+%%    ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Op, Opts]).
+%%
+%%def log(nil, _op, _opts), do: nil
+%%
+%%%% @doc Adds a number of tags to a trace
+%%-spec tags(trace, list) -> any.
+%%def tags({:trace, SrvId, TraceId}, tags),
+%%do: Services.Util.callback(SrvId, :trace_tags, [SrvId, TraceId, tags])
+%%
+%%def tags(nil, _tags), do: nil
+%%
+%%%% @doc Generates a new trace as child of an existing one
+%%-spec make_parent(trace) -> any.
+%%def make_parent({:trace, SrvId, TraceId}) -> ?CALL_SRV(SrvId, trace_child, [SrvId, TraceId]).
+%%
+%%def make_parent(nil), do: nil
+%%
+%%def default_create(_SrvId, trace_id), do: {:default, trace_id}
+%%
+%%def default_finish(SrvId, trace_id),
+%%do: default_log(SrvId, trace_id, :trace_finished, [])
+%%
+%%def default_log(SrvId, {:default, name}, op, opts) do
+%%msg =
+%%"#{name} (#{SrvId}): #{op}" <>
+%%case opts do
+%%[] -> ""
+%%_ -> " (#{inspect(opts)})"
+%%end
+%%
+%%level = Keyword.get(opts, :level, :debug)
+%%Logger.log(level, msg)
+%%end
+%%
+%%def default_log(_SrvId, _id, _op, _opts), do: nil
+%%end
+%%
+%%
+%%
+%%
+%%
+%%
+%%
+%%
+%%
+%%
+%%
+%%
+%%
+%%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 %% @doc Runs a function into a traced environment
 %% - SrvId is used to find if audit_srv key if present

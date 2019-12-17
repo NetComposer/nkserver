@@ -28,7 +28,7 @@
 -export([srv_master_init/2, srv_master_handle_call/4, srv_master_handle_cast/3,
          srv_master_handle_info/3, srv_master_code_change/4, srv_master_terminate/3,
          srv_master_timed_check/3, srv_master_become_leader/2]).
-
+-export([trace_create/3, trace_finish/2, trace_log/4, trace_tags/3, trace_child/2]).
 -export_type([continue/0]).
 
 -include("nkserver.hrl").
@@ -269,3 +269,42 @@ srv_master_timed_check(_IsMaster, _SrvId, State) ->
 
 srv_master_become_leader(SrvId, State) ->
     {nkserver_master:strategy_min_nodes(SrvId), State}.
+
+
+
+
+%% ===================================================================
+%% Trace callbacks
+%% ===================================================================
+
+%% @doc Starts a new trace, executing a fun
+-spec trace_create(id(), nkserver_trace:id(), term()) -> any().
+
+trace_create(Srv, TraceId, _Parent) ->
+    nkserver_trace:default_create(Srv, TraceId).
+
+
+%% @doc Finishes a started trace. You don't need to call it directly
+-spec trace_finish(id(), nkserver_trace:id()) -> any().
+
+trace_finish(Srv, TraceId) ->
+    nkserver_trace:default_finish(Srv, TraceId).
+
+
+%% @doc Generates a new trace
+-spec trace_log(id(), nkserver_trace:id(), term(), map()) -> any().
+
+trace_log(Srv, TraceId, Op, Meta) ->
+    nkserver_trace:default_log(Srv, TraceId, Op, Meta).
+
+%% @doc Adds a number of tags to a trace
+-spec trace_tags(id(), nkserver_trace:id(), map()) -> any().
+
+trace_tags(_Srv, _TraceId, _Tags) -> ok.
+
+
+%% @doc Generates a child trace
+-spec trace_child(id(), nkserver_trace:id()) -> any().
+
+trace_child(Srv, TraceId) ->
+    {trace, Srv, TraceId}.
