@@ -277,7 +277,12 @@ srv_master_become_leader(SrvId, State) ->
 %% Trace callbacks
 %% ===================================================================
 
-%% @doc Starts a new trace, executing a fun
+%% @doc Called when nkserver_trace:run/4 is run, to initialize
+%% a new trace. Must return a trace identification, that will be used
+%% when calling the fun
+%% By default it returns a trace {nkserver_trace, Name} that is
+%% showed on screen with nkserver_trace:log/2,3
+
 -spec trace_create(id(), nkserver_trace:name(), nkserver_trace:run_opts()) ->
     nkserver_trace:id().
 
@@ -285,7 +290,7 @@ trace_create(_SrvId, Name, _Opts) ->
     {ok, {nkserver_trace, Name}}.
 
 
-%% @doc Finishes a started trace. You don't need to call it directly
+%% @doc Called when nkserver_trace:finish/1 is called, to finishes a started trace.
 -spec trace_finish(id(), nkserver_trace:id()) -> any().
 
 trace_finish(SrvId, TraceId) ->
@@ -293,7 +298,9 @@ trace_finish(SrvId, TraceId) ->
 
 
 
-%% @doc Generates a new trace
+%% @doc Called when nkserver_trace:log/2,3 is called
+%% It can do any processing
+
 -spec trace_log(id(), nkserver_trace:id(), nkserver_trace:op(), map()) ->
     any().
 
@@ -309,7 +316,6 @@ trace_log(SrvId, {nkserver_trace, Name}, Op, Meta) when is_map(Meta) ->
 
 trace_log(_SrvId, _TraceId, _Op, _Meta) ->
     ok.
-
 
 
 %% @doc Adds a number of tags to a trace

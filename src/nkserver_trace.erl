@@ -58,7 +58,7 @@
 -type name() :: term().
 -type id() :: term().
 -type trace() :: {trace, nkserver:id(), id()}.
--type op() :: atom() | integer().
+-type op() :: atom() | binary() | string().
 -type run_opts() ::
     #{}.
 
