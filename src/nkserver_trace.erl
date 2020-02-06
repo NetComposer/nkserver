@@ -23,7 +23,7 @@
 
 -module(nkserver_trace).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([run/4, log/2, log/3, tags/2]).
+-export([run/4, log/3, log/4, log/5, tags/2]).
 -export([level_to_lager/1]).
 
 %%-export([start/5, debug/2, debug/3, info/2, info/3, notice/2, notice/3, warning/2, warning/3]).
@@ -59,8 +59,27 @@
 -type id() :: term().
 -type trace() :: {trace, nkserver:id(), id()}.
 -type op() :: atom() | binary() | string().
--type run_opts() ::
-    #{}.
+-type run_opts() :: map().
+
+-type log_data() :: map().
+
+
+-type log_metadata() ::
+    #{
+        uid => binary(),
+        node => binary(),
+        date => binary(),
+        app => binary(),
+        namespace => binary(),
+        group => binary(),
+        resource => binary(),
+        target => binary(),
+        level => 1..7 | level(),
+        reason => binary()
+    }.
+
+-type level() :: debug | info | notice | warning | error.
+
 
 
 %% @doc
@@ -102,22 +121,31 @@ finish({trace, SrvId, TraceId}) ->
 
 
 %% @doc Generates a new trace entry
--spec log(trace(), op(), map()) ->
+-spec log(trace(), level(), op()) ->
     any().
 
-log(Trace, Op) ->
-    log(Trace, Op, #{}).
+log(Trace, Level, Op) ->
+    log(Trace, Level, Op, #{}, #{}).
 
 
 %% @doc Generates a new trace entry
--spec log(trace(), op()) ->
+-spec log(trace(), level(), op(), log_data()) ->
     any().
 
-log({trace, SrvId, TraceId}, Op, Meta) when is_map(Meta) ->
-    ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Op, Meta]);
+log(Trace, Level, Op, Data) when is_map(Data) ->
+    log(Trace, Level, Op, Data, #{}).
 
-log({trace, SrvId, TraceId}, Txt, Args) when is_list(Txt), is_list(Args) ->
-    ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, {Txt, Args}, #{}]).
+
+%% @doc Generates a new trace entry
+-spec log(trace(), level(), op(), log_data(), log_metadata()) ->
+    any().
+
+log({trace, SrvId, TraceId}, Level, {Txt, Args}, Data, Meta) when is_list(Txt), is_list(Args) ->
+    Op2 = nklib_util:to_binary(io_lib:format(Txt, Args)),
+    ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Level, Op2, Data, Meta]);
+
+log({trace, SrvId, TraceId}, Level, Op, Data, Meta) when is_map(Data), is_map(Meta) ->
+    ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Level, Op, Data, Meta]).
 
 
 %% @doc Adds a number of tags to a trace

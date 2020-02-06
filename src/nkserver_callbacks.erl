@@ -28,7 +28,7 @@
 -export([srv_master_init/2, srv_master_handle_call/4, srv_master_handle_cast/3,
          srv_master_handle_info/3, srv_master_code_change/4, srv_master_terminate/3,
          srv_master_timed_check/3, srv_master_become_leader/2]).
--export([trace_create/3, trace_finish/2, trace_log/4, trace_tags/3]).
+-export([trace_create/3, trace_finish/2, trace_log/6, trace_tags/3]).
 -export_type([continue/0]).
 
 -include("nkserver.hrl").
@@ -294,27 +294,22 @@ trace_create(_SrvId, Name, _Opts) ->
 -spec trace_finish(id(), nkserver_trace:id()) -> any().
 
 trace_finish(SrvId, TraceId) ->
-    trace_log(SrvId, TraceId, "trace finished", #{}).
+    trace_log(SrvId, TraceId, info, "trace finished", #{}, #{}).
 
 
 
 %% @doc Called when nkserver_trace:log/2,3 is called
 %% It can do any processing
 
--spec trace_log(id(), nkserver_trace:id(), nkserver_trace:op(), map()) ->
+-spec trace_log(id(), nkserver_trace:id(), nkserver_trace:level(), nkserver_trace:op(),
+                nkserver_trace:log_data(), nkserver_trace:log_metadata()) ->
     any().
 
-trace_log(SrvId, {nkserver_trace, Name}, {Txt, Args}, Meta) when is_map(Meta) ->
-    Level = nkserver_trace:level_to_lager(maps:get(level, Meta, 2)),
-    Txt2 = "Service '~s' trace (~s): " ++ Txt,
-    lager:log(Level, [], Txt2, [SrvId, Name|Args]);
+trace_log(SrvId, {nkserver_trace, Name}, Level, Op, _Data, _Meta) ->
+    Txt2 = nklib_util:to_binary(io_lib:format("Service '~s' trace (~p): ~s", [SrvId, Name, Op])),
+    lager:log(Level, [], Txt2, []);
 
-trace_log(SrvId, {nkserver_trace, Name}, Op, Meta) when is_map(Meta) ->
-    Level = nkserver_trace:level_to_lager(maps:get(level, Meta, 2)),
-    Txt = "Service '~s' Trace (~s): " ++ nklib_util:to_list(Op),
-    lager:log(Level, [], Txt, [SrvId, Name]);
-
-trace_log(_SrvId, _TraceId, _Op, _Meta) ->
+trace_log(_SrvId, _TraceId, _Level, _Op, _Data, _Meta) ->
     ok.
 
 
