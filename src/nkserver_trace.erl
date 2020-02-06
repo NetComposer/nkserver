@@ -94,15 +94,12 @@ run(SrvId, Name, Fun, Opts) ->
                 Fun(Trace)
             catch
                 Class:Reason:Stack ->
-                    Meta = #{
-                        level => warning,
-                        data => #{
-                            class => Class,
-                            reason => nklib_util:to_binary(Reason),
-                            stack => nklib_util:to_binary(Stack)
-                        }
+                    Data = #{
+                        class => Class,
+                        reason => nklib_util:to_binary(Reason),
+                        stack => nklib_util:to_binary(Stack)
                     },
-                    log(Trace, trace_exception, Meta),
+                    log(Trace, warning, trace_exception, Data),
                     erlang:raise(Class, Reason, Stack)
             after
                 finish(Trace)
@@ -121,19 +118,21 @@ finish({trace, SrvId, TraceId}) ->
 
 
 %% @doc Generates a new trace entry
--spec log(trace(), level(), op()) ->
+
+
+-spec log(trace()|nkserver:id(), level(), op()) ->
     any().
 
-log(Trace, Level, Op) ->
-    log(Trace, Level, Op, #{}, #{}).
+log(TraceOrSrvId, Level, Op) ->
+    log(TraceOrSrvId, Level, Op, #{}, #{}).
 
 
 %% @doc Generates a new trace entry
 -spec log(trace(), level(), op(), log_data()) ->
     any().
 
-log(Trace, Level, Op, Data) when is_map(Data) ->
-    log(Trace, Level, Op, Data, #{}).
+log(TraceOrSrvId, Level, Op, Data) when is_map(Data) ->
+    log(TraceOrSrvId, Level, Op, Data, #{}).
 
 
 %% @doc Generates a new trace entry
@@ -145,7 +144,14 @@ log({trace, SrvId, TraceId}, Level, {Txt, Args}, Data, Meta) when is_list(Txt), 
     ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Level, Op2, Data, Meta]);
 
 log({trace, SrvId, TraceId}, Level, Op, Data, Meta) when is_map(Data), is_map(Meta) ->
-    ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Level, Op, Data, Meta]).
+    ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Level, Op, Data, Meta]);
+
+log(SrvId, Level, {Txt, Args}, Data, Meta) when is_list(Txt), is_list(Args) ->
+    Op2 = nklib_util:to_binary(io_lib:format(Txt, Args)),
+    ?CALL_SRV(SrvId, trace_log, [SrvId, none, Level, Op2, Data, Meta]);
+
+log(SrvId, Level, Op, Data, Meta) when is_map(Data), is_map(Meta) ->
+    ?CALL_SRV(SrvId, trace_log, [SrvId, none, Level, Op, Data, Meta]).
 
 
 %% @doc Adds a number of tags to a trace

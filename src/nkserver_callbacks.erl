@@ -301,12 +301,16 @@ trace_finish(SrvId, TraceId) ->
 %% @doc Called when nkserver_trace:log/2,3 is called
 %% It can do any processing
 
--spec trace_log(id(), nkserver_trace:id(), nkserver_trace:level(), nkserver_trace:op(),
+-spec trace_log(id(), nkserver_trace:id()|none, nkserver_trace:level(), nkserver_trace:op(),
                 nkserver_trace:log_data(), nkserver_trace:log_metadata()) ->
     any().
 
 trace_log(SrvId, {nkserver_trace, Name}, Level, Op, _Data, _Meta) ->
     Txt2 = nklib_util:to_binary(io_lib:format("Service '~s' trace (~p): ~s", [SrvId, Name, Op])),
+    lager:log(Level, [], Txt2, []);
+
+trace_log(SrvId, none, Level, Op, _Data, _Meta) ->
+    Txt2 = nklib_util:to_binary(io_lib:format("Service '~s' ~s", [SrvId, Op])),
     lager:log(Level, [], Txt2, []);
 
 trace_log(_SrvId, _TraceId, _Level, _Op, _Data, _Meta) ->
