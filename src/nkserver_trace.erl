@@ -152,11 +152,14 @@ log(TraceOrSrvId, Level, Txt) when is_atom(Level), is_list(Txt) ->
 
 
 %% @doc Generates a new log entry
--spec log(trace()|nkserver:id(), level(), string(), list()) ->
+-spec log(trace()|nkserver:id(), level(), string(), list()|map()) ->
     any().
 
 log(TraceOrSrvId, Level, Txt, Args) when is_atom(Level), is_list(Txt), is_list(Args) ->
-    log(TraceOrSrvId, Level, Txt, Args, #{}).
+    log(TraceOrSrvId, Level, Txt, Args, #{});
+
+log(TraceOrSrvId, Level, Txt, Meta) when is_atom(Level), is_list(Txt), is_map(Meta) ->
+    log(TraceOrSrvId, Level, Txt, [], #{}).
 
 
 %% @doc Generates a new trace entry
