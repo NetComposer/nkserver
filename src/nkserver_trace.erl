@@ -23,8 +23,8 @@
 
 -module(nkserver_trace).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([run/4, log/3, log/4, log/5, tags/2]).
--export([level_to_lager/1]).
+-export([trace_run/4, event/2, event/3, log/3, log/4, log/5, trace_tags/2]).
+-export([level_to_lager/1, flatten_tags/1]).
 
 %%-export([start/5, debug/2, debug/3, info/2, info/3, notice/2, notice/3, warning/2, warning/3]).
 %%-export([trace/2, error/2, error/3, tags/2, status/3, log/3, log/4]).
@@ -55,16 +55,16 @@
 %%}).
 
 
--type name() :: term().
 -type id() :: term().
 -type trace() :: {trace, nkserver:id(), id()}.
--type op() :: atom() | binary() | string().
--type run_opts() :: map().
+-type event_type() :: binary().
+-type run_opts() ::
+    #{
+        name => binary(),           % Name for trace
+        metadata => metadata()
+    }.
 
--type log_data() :: map().
-
-
--type log_metadata() ::
+-type metadata() ::
     #{
         uid => binary(),
         node => binary(),
@@ -75,7 +75,8 @@
         resource => binary(),
         target => binary(),
         level => 1..7 | level(),
-        reason => binary()
+        reason => binary(),
+        data => map()
     }.
 
 -type level() :: debug | info | notice | warning | error.
@@ -83,13 +84,13 @@
 
 
 %% @doc
--spec run(nkserver:id(), name(), fun(), run_opts()) ->
+-spec trace_run(nkserver:id(), id(), fun(), run_opts()) ->
     any().
 
-run(SrvId, Name, Fun, Opts) ->
-    case ?CALL_SRV(SrvId, trace_create, [SrvId, Name, Opts]) of
-        {ok, TraceId} ->
-            Trace = {trace, SrvId, TraceId},
+trace_run(SrvId, TraceId, Fun, Opts) ->
+    case ?CALL_SRV(SrvId, trace_create, [SrvId, TraceId, Opts]) of
+        {ok, TraceId2} ->
+            Trace = {trace, SrvId, TraceId2},
             try
                 Fun(Trace)
             catch
@@ -102,7 +103,7 @@ run(SrvId, Name, Fun, Opts) ->
                     log(Trace, warning, trace_exception, Data),
                     erlang:raise(Class, Reason, Stack)
             after
-                finish(Trace)
+                trace_finish(Trace)
             end;
         {error, Error} ->
             {error, {trace_creation_error, Error}}
@@ -110,55 +111,72 @@ run(SrvId, Name, Fun, Opts) ->
 
 
 %% @doc Finishes a started trace. You don't need to call it directly
--spec finish(trace()) ->
+-spec trace_finish(trace()) ->
     any().
 
-finish({trace, SrvId, TraceId}) ->
+trace_finish({trace, SrvId, TraceId}) ->
     ?CALL_SRV(SrvId, trace_finish, [SrvId, TraceId]).
 
 
-%% @doc Generates a new trace entry
-
-
--spec log(trace()|nkserver:id(), level(), op()) ->
+%% @doc Generates a new trace event
+-spec event(trace()|nkserver:id(), event_type()) ->
     any().
 
-log(TraceOrSrvId, Level, Op) ->
-    log(TraceOrSrvId, Level, Op, #{}, #{}).
+event(TraceOrSrvId, Type) ->
+    event(TraceOrSrvId, Type, #{}).
 
 
-%% @doc Generates a new trace entry
--spec log(trace(), level(), op(), log_data()) ->
+%% @doc Generates a new trace event
+%% Log should never cause an exception
+-spec event(trace()|nkserver:id(), event_type(), metadata()) ->
+    ok.
+
+event({trace, SrvId, TraceId}, Type, Meta) when is_map(Meta) ->
+    try
+        ?CALL_SRV(SrvId, trace_event, [SrvId, TraceId, to_bin(Type), Meta])
+    catch
+        Class:Reason:Stack ->
+            lager:warning("Exception calling nkserver_trace:event() ~p ~p (~p)", [Class, Reason, Stack])
+    end;
+
+event(SrvId, Type, Meta) when is_atom(SrvId), is_map(Meta) ->
+    log(SrvId, info, atom_to_list(Type), [], Meta).
+
+
+%% @doc Generates a new log entry
+-spec log(trace()|nkserver:id(), level(), string()) ->
     any().
 
-log(TraceOrSrvId, Level, Op, Data) when is_map(Data) ->
-    log(TraceOrSrvId, Level, Op, Data, #{}).
+log(TraceOrSrvId, Level, Txt) when is_atom(Level), is_list(Txt) ->
+    log(TraceOrSrvId, Level, Txt, [], #{}).
+
+
+%% @doc Generates a new log entry
+-spec log(trace()|nkserver:id(), level(), string(), list()) ->
+    any().
+
+log(TraceOrSrvId, Level, Txt, Args) when is_atom(Level), is_list(Txt), is_list(Args) ->
+    log(TraceOrSrvId, Level, Txt, Args, #{}).
 
 
 %% @doc Generates a new trace entry
 %% Log should never cause an exception
--spec log(trace(), level(), op(), log_data(), log_metadata()) ->
+-spec log(trace()|nkserver:id(), level(), string(), list(), metadata()) ->
     any().
 
-log({trace, _, _}=Trace, Level, {Txt, Args}, Data, Meta) when is_list(Txt), is_list(Args) ->
-    Op2 = nklib_util:to_binary(io_lib:format(Txt, Args)),
-    log(Trace, Level, Op2, Data, Meta);
-
-log({trace, SrvId, TraceId}, Level, Op, Data, Meta) when is_map(Data), is_map(Meta) ->
+log({trace, SrvId, TraceId}, Level, Txt, Args, Meta)
+        when is_atom(Level), is_list(Txt), is_list(Args), is_map(Meta) ->
     try
-        ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Level, Op, Data, Meta])
+        ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Level, Txt, Args, Meta])
     catch
         Class:Reason:Stack ->
             lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
     end;
 
-log(SrvId, Level, {Txt, Args}, Data, Meta) when is_atom(SrvId), is_list(Txt), is_list(Args) ->
-    Op2 = nklib_util:to_binary(io_lib:format(Txt, Args)),
-    log(SrvId, Level, Op2, Data, Meta);
-
-log(SrvId, Level, Op, Data, Meta) when is_atom(SrvId), is_map(Data), is_map(Meta) ->
+log(SrvId, Level, Txt, Args, Meta)
+    when is_atom(SrvId), is_atom(Level), is_list(Txt), is_list(Args), is_map(Meta) ->
     try
-        ?CALL_SRV(SrvId, trace_log, [SrvId, none, Level, Op, Data, Meta])
+        ?CALL_SRV(SrvId, trace_log, [SrvId, none, Level, Txt, Args, Meta])
     catch
         Class:Reason:Stack ->
             lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
@@ -166,10 +184,10 @@ log(SrvId, Level, Op, Data, Meta) when is_atom(SrvId), is_map(Data), is_map(Meta
 
 
 %% @doc Adds a number of tags to a trace
--spec tags(trace(), map()) ->
+-spec trace_tags(trace(), map()) ->
     any().
 
-tags({trace, SrvId, TraceId}, Tags) ->
+trace_tags({trace, SrvId, TraceId}, Tags) ->
     try
         ?CALL_SRV(SrvId, trace_tags, [SrvId, TraceId, Tags])
     catch
@@ -189,6 +207,34 @@ level_to_lager(info) -> info;
 level_to_lager(notice) -> notice;
 level_to_lager(warning) -> warning;
 level_to_lager(_) -> error.
+
+
+%% @doc
+flatten_tags(Map) ->
+    do_flatten_tags(maps:to_list(Map), <<>>, []).
+
+
+do_flatten_tags([], _Prefix, Acc) ->
+    maps:from_list(Acc);
+
+do_flatten_tags([{Key, Val}|Rest], Prefix, Acc) ->
+    Key2 = case Prefix of
+        <<>> ->
+            to_bin(Key);
+        _ ->
+            <<Prefix/binary, $., (to_bin(Key))/binary>>
+    end,
+    case is_map(Val) of
+        true ->
+            do_flatten_tags(maps:to_list(Val), Key2, Acc);
+        false ->
+            do_flatten_tags(Rest, Prefix, [{Key2, to_bin(Val)}|Acc])
+    end.
+
+
+
+to_bin(Term) when is_binary(Term) -> Term;
+to_bin(Term) -> nklib_util:to_binary(Term).
 
 
 %%%% @doc Generates a new trace as child of an existing one
