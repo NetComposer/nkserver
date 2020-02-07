@@ -140,7 +140,12 @@ event({trace, SrvId, TraceId}, Type, Meta) when is_map(Meta) ->
     end;
 
 event(SrvId, Type, Meta) when is_atom(SrvId), is_map(Meta) ->
-    log(SrvId, info, atom_to_list(Type), [], Meta).
+    try
+        ?CALL_SRV(SrvId, trace_event, [SrvId, none, Type, Meta])
+    catch
+        Class:Reason:Stack ->
+            lager:warning("Exception calling nkserver_trace:event() ~p ~p (~p)", [Class, Reason, Stack])
+    end.
 
 
 %% @doc Generates a new log entry
