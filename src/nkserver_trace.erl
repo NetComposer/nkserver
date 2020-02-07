@@ -136,22 +136,33 @@ log(TraceOrSrvId, Level, Op, Data) when is_map(Data) ->
 
 
 %% @doc Generates a new trace entry
+%% Log should never cause an exception
 -spec log(trace(), level(), op(), log_data(), log_metadata()) ->
     any().
 
-log({trace, SrvId, TraceId}, Level, {Txt, Args}, Data, Meta) when is_list(Txt), is_list(Args) ->
+log({trace, _, _}=Trace, Level, {Txt, Args}, Data, Meta) when is_list(Txt), is_list(Args) ->
     Op2 = nklib_util:to_binary(io_lib:format(Txt, Args)),
-    ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Level, Op2, Data, Meta]);
+    log(Trace, Level, Op2, Data, Meta);
 
 log({trace, SrvId, TraceId}, Level, Op, Data, Meta) when is_map(Data), is_map(Meta) ->
-    ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Level, Op, Data, Meta]);
+    try
+        ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Level, Op, Data, Meta])
+    catch
+        Class:Reason:Stack ->
+            lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
+    end;
 
-log(SrvId, Level, {Txt, Args}, Data, Meta) when is_list(Txt), is_list(Args) ->
+log(SrvId, Level, {Txt, Args}, Data, Meta) when is_atom(SrvId), is_list(Txt), is_list(Args) ->
     Op2 = nklib_util:to_binary(io_lib:format(Txt, Args)),
-    ?CALL_SRV(SrvId, trace_log, [SrvId, none, Level, Op2, Data, Meta]);
+    log(SrvId, Level, Op2, Data, Meta);
 
-log(SrvId, Level, Op, Data, Meta) when is_map(Data), is_map(Meta) ->
-    ?CALL_SRV(SrvId, trace_log, [SrvId, none, Level, Op, Data, Meta]).
+log(SrvId, Level, Op, Data, Meta) when is_atom(SrvId), is_map(Data), is_map(Meta) ->
+    try
+        ?CALL_SRV(SrvId, trace_log, [SrvId, none, Level, Op, Data, Meta])
+    catch
+        Class:Reason:Stack ->
+            lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
+    end.
 
 
 %% @doc Adds a number of tags to a trace
@@ -159,7 +170,13 @@ log(SrvId, Level, Op, Data, Meta) when is_map(Data), is_map(Meta) ->
     any().
 
 tags({trace, SrvId, TraceId}, Tags) ->
-    ?CALL_SRV(SrvId, trace_tags, [SrvId, TraceId, Tags]).
+    try
+        ?CALL_SRV(SrvId, trace_tags, [SrvId, TraceId, Tags])
+    catch
+        Class:Reason:Stack ->
+            lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
+    end.
+
 
 
 %% @doc
