@@ -57,7 +57,7 @@
 
 -type id() :: term().
 -type trace() :: {trace, nkserver:id(), id()}.
--type event_type() :: binary().
+-type event_type() :: atom().
 -type run_opts() ::
     #{
         name => binary(),           % Name for trace
@@ -133,7 +133,7 @@ event(TraceOrSrvId, Type) ->
 
 event({trace, SrvId, TraceId}, Type, Meta) when is_map(Meta) ->
     try
-        ?CALL_SRV(SrvId, trace_event, [SrvId, TraceId, to_bin(Type), Meta])
+        ?CALL_SRV(SrvId, trace_event, [SrvId, TraceId, Type, Meta])
     catch
         Class:Reason:Stack ->
             lager:warning("Exception calling nkserver_trace:event() ~p ~p (~p)", [Class, Reason, Stack])
