@@ -23,8 +23,8 @@
 
 -module(nkserver_trace).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([trace_run/4, event/2, event/3, log/3, log/4, log/5, trace_tags/2]).
--export([level_to_lager/1, flatten_tags/1]).
+-export([trace_run/4, event/3, event/4, log/4, log/5, log/6, trace_tags/3]).
+-export([level_to_name/1, name_to_level/1, flatten_tags/1]).
 
 %%-export([start/5, debug/2, debug/3, info/2, info/3, notice/2, notice/3, warning/2, warning/3]).
 %%-export([trace/2, error/2, error/3, tags/2, status/3, log/3, log/4]).
@@ -34,65 +34,38 @@
 %% Public
 %% ===================================================================
 
-%%-type run_opts() ::
-%%#{
-%%    base_audit => nkserver_audit:audit(),
-%%    base_txt => string(),
-%%    base_args => list
-%%}.
-%%
-%%-type level() :: debug | info | notice | warning | error.
-%%
-%%-record(nkserver_trace, {
-%%    srv :: nkserver:id(),
-%%    trace :: binary(),
-%%    has_ot :: boolean(),
-%%    has_audit :: boolean(),
-%%    base_txt :: string(),
-%%    base_args :: list(),
-%%    audit_srv :: nkserver:id() | undefined,
-%%    base_audit :: nkserver_audit:audit() | undefined
-%%}).
+
 
 
 -type id() :: term().
--type trace() :: {trace, nkserver:id(), id()}.
+-type trace_id() :: term().
 -type event_type() :: atom().
 -type run_opts() ::
     #{
         name => binary(),           % Name for trace
-        metadata => metadata()
+        data => data(),             % Common data
+        metadata => metadata()      % Common metadata
     }.
 
--type metadata() ::
-    #{
-        uid => binary(),
-        node => binary(),
-        date => binary(),
-        app => binary(),
-        namespace => binary(),
-        group => binary(),
-        resource => binary(),
-        target => binary(),
-        level => 1..7 | level(),
-        reason => binary(),
-        data => map()
-    }.
+% To be merged with each call
+-type data() :: map().
+
+% To be used at each call
+-type metadata() :: map().
 
 -type level() :: debug | info | notice | warning | error.
 
 
 
 %% @doc
--spec trace_run(nkserver:id(), id(), fun(), run_opts()) ->
+-spec trace_run(nkserver:id(), term(), fun(), run_opts()) ->
     any().
 
 trace_run(SrvId, TraceId, Fun, Opts) ->
     case ?CALL_SRV(SrvId, trace_create, [SrvId, TraceId, Opts]) of
         {ok, TraceId2} ->
-            Trace = {trace, SrvId, TraceId2},
             try
-                Fun(Trace)
+                Fun(TraceId2)
             catch
                 Class:Reason:Stack ->
                     Data = #{
@@ -100,10 +73,10 @@ trace_run(SrvId, TraceId, Fun, Opts) ->
                         reason => nklib_util:to_binary(Reason),
                         stack => nklib_util:to_binary(Stack)
                     },
-                    log(Trace, warning, trace_exception, Data),
+                    log(SrvId, TraceId2, warning, trace_exception, Data),
                     erlang:raise(Class, Reason, Stack)
             after
-                trace_finish(Trace)
+                trace_finish(SrvId, TraceId2)
             end;
         {error, Error} ->
             {error, {trace_creation_error, Error}}
@@ -111,37 +84,29 @@ trace_run(SrvId, TraceId, Fun, Opts) ->
 
 
 %% @doc Finishes a started trace. You don't need to call it directly
--spec trace_finish(trace()) ->
+-spec trace_finish(nkserver:id(), trace_id()) ->
     any().
 
-trace_finish({trace, SrvId, TraceId}) ->
+trace_finish(SrvId, TraceId) ->
     ?CALL_SRV(SrvId, trace_finish, [SrvId, TraceId]).
 
 
 %% @doc Generates a new trace event
--spec event(trace()|nkserver:id(), event_type()) ->
+-spec event(nkserver:id(), trace_id(), event_type()) ->
     any().
 
-event(TraceOrSrvId, Type) ->
-    event(TraceOrSrvId, Type, #{}).
+event(SrvId, TraceId, Type) ->
+    event(SrvId, TraceId, Type, #{}).
 
 
 %% @doc Generates a new trace event
 %% Log should never cause an exception
--spec event(trace()|nkserver:id(), event_type(), metadata()) ->
+-spec event(nkserver:id(), trace_id(), event_type(), metadata()) ->
     ok.
 
-event({trace, SrvId, TraceId}, Type, Meta) when is_map(Meta) ->
+event(SrvId, TraceId, Type, Data) when is_map(Data) ->
     try
-        ?CALL_SRV(SrvId, trace_event, [SrvId, TraceId, Type, Meta])
-    catch
-        Class:Reason:Stack ->
-            lager:warning("Exception calling nkserver_trace:event() ~p ~p (~p)", [Class, Reason, Stack])
-    end;
-
-event(SrvId, Type, Meta) when is_atom(SrvId), is_map(Meta) ->
-    try
-        ?CALL_SRV(SrvId, trace_event, [SrvId, none, Type, Meta])
+        ?CALL_SRV(SrvId, trace_event, [SrvId, TraceId, Type, Data])
     catch
         Class:Reason:Stack ->
             lager:warning("Exception calling nkserver_trace:event() ~p ~p (~p)", [Class, Reason, Stack])
@@ -149,42 +114,33 @@ event(SrvId, Type, Meta) when is_atom(SrvId), is_map(Meta) ->
 
 
 %% @doc Generates a new log entry
--spec log(trace()|nkserver:id(), level(), string()) ->
+-spec log(nkserver:id(), trace_id(), level(), string()) ->
     any().
 
-log(TraceOrSrvId, Level, Txt) when is_atom(Level), is_list(Txt) ->
-    log(TraceOrSrvId, Level, Txt, [], #{}).
+log(SrvId, Trace, Level, Txt) when is_atom(Level), is_list(Txt) ->
+    log(SrvId, Trace, Level, Txt, [], #{}).
 
 
 %% @doc Generates a new log entry
--spec log(trace()|nkserver:id(), level(), string(), list()|map()) ->
+-spec log(nkserver:id(), trace_id(), level(), string(), list()|map()) ->
     any().
 
-log(TraceOrSrvId, Level, Txt, Args) when is_atom(Level), is_list(Txt), is_list(Args) ->
-    log(TraceOrSrvId, Level, Txt, Args, #{});
+log(SrvId, Trace, Level, Txt, Args) when is_atom(Level), is_list(Txt), is_list(Args) ->
+    log(SrvId, Trace, Level, Txt, Args, #{});
 
-log(TraceOrSrvId, Level, Txt, Meta) when is_atom(Level), is_list(Txt), is_map(Meta) ->
-    log(TraceOrSrvId, Level, Txt, [], #{}).
+log(SrvId, Trace, Level, Txt, Data) when is_atom(Level), is_list(Txt), is_map(Data) ->
+    log(SrvId, Trace, Level, Txt, [], #{}).
 
 
 %% @doc Generates a new trace entry
 %% Log should never cause an exception
--spec log(trace()|nkserver:id(), level(), string(), list(), metadata()) ->
+-spec log(nkserver:id(), trace_id(), level(), string(), list(), metadata()) ->
     any().
 
-log({trace, SrvId, TraceId}, Level, Txt, Args, Meta)
-        when is_atom(Level), is_list(Txt), is_list(Args), is_map(Meta) ->
+log(SrvId, TraceId, Level, Txt, Args, Data)
+        when is_atom(Level), is_list(Txt), is_list(Args), is_map(Data) ->
     try
-        ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Level, Txt, Args, Meta])
-    catch
-        Class:Reason:Stack ->
-            lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
-    end;
-
-log(SrvId, Level, Txt, Args, Meta)
-    when is_atom(SrvId), is_atom(Level), is_list(Txt), is_list(Args), is_map(Meta) ->
-    try
-        ?CALL_SRV(SrvId, trace_log, [SrvId, none, Level, Txt, Args, Meta])
+        ?CALL_SRV(SrvId, trace_log, [SrvId, TraceId, Level, Txt, Args, Data])
     catch
         Class:Reason:Stack ->
             lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
@@ -192,10 +148,10 @@ log(SrvId, Level, Txt, Args, Meta)
 
 
 %% @doc Adds a number of tags to a trace
--spec trace_tags(trace(), map()) ->
+-spec trace_tags(nkserver:id(), trace_id(), map()) ->
     any().
 
-trace_tags({trace, SrvId, TraceId}, Tags) ->
+trace_tags(SrvId, TraceId, Tags) ->
     try
         ?CALL_SRV(SrvId, trace_tags, [SrvId, TraceId, Tags])
     catch
@@ -206,15 +162,30 @@ trace_tags({trace, SrvId, TraceId}, Tags) ->
 
 
 %% @doc
-level_to_lager(1) -> debug;
-level_to_lager(2) -> info;
-level_to_lager(3) -> notice;
-level_to_lager(4) -> warning;
-level_to_lager(debug) -> debug;
-level_to_lager(info) -> info;
-level_to_lager(notice) -> notice;
-level_to_lager(warning) -> warning;
-level_to_lager(_) -> error.
+level_to_name(1) -> debug;
+level_to_name(2) -> info;
+level_to_name(3) -> notice;
+level_to_name(4) -> warning;
+level_to_name(5) -> error;
+level_to_name(debug) -> debug;
+level_to_name(info) -> info;
+level_to_name(notice) -> notice;
+level_to_name(warning) -> warning;
+level_to_name(error) -> error;
+level_to_name(_) -> error.
+
+
+%% @doc
+name_to_level(1) -> 1;
+name_to_level(2) -> 2;
+name_to_level(3) -> 3;
+name_to_level(4) -> 4;
+name_to_level(5) -> 5;
+name_to_level(debug) -> 1;
+name_to_level(info) -> 2;
+name_to_level(notice) -> 3;
+name_to_level(warning) -> 4;
+name_to_level(error) -> 5.
 
 
 %% @doc
