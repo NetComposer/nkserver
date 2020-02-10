@@ -25,34 +25,6 @@
 %% Defines
 %% ===================================================================
 
-%%-define(DEBUG(Txt), ok=nkserver_trace:debug(?MODULE, Txt)).
-%%-define(DEBUG(Txt, Args), ok=nkserver_trace:debug(?MODULE, Txt, Args)).
-%%-define(INFO(Txt), ok=nkserver_trace:info(?MODULE, Txt)).
-%%-define(INFO(Txt, Args), ok=nkserver_trace:info(?MODULE, Txt, Args)).
-%%-define(NOTICE(Txt), ok=nkserver_trace:notice(?MODULE, Txt)).
-%%-define(NOTICE(Txt, Args), ok=nkserver_trace:notice(?MODULE, Txt, Args)).
-%%-define(WARNING(Txt), ok=nkserver_trace:warning(?MODULE, Txt)).
-%%-define(WARNING(Txt, Args), ok=nkserver_trace:warning(?MODULE, Txt, Args)).
-%%-define(ERROR(Txt), ok=nkserver_trace:error(?MODULE, Txt)).
-%%-define(ERROR(Txt, Args), ok=nkserver_trace:error(?MODULE, Txt, Args)).
-%%-define(STATUS(Level, Status), ok=nkserver_trace:status(?MODULE, Level, Status)).
-%%-define(TAGS(Tags), ok=nkserver_trace:tags(?MODULE, Tags)).
-%%-define(TRACE(Audit), ok=nkserver_trace:trace(?MODULE, Audit)).
-%%
-%%-define(DEBUG_ID(Id, Txt), ok=nkserver_trace:debug(Id, Txt)).
-%%-define(DEBUG_ID(Id, Txt, Args), ok=nkserver_trace:debug(Id, Txt, Args)).
-%%-define(INFO_ID(Id, Txt), ok=nkserver_trace:info(Id, Txt)).
-%%-define(INFO_ID(Id, Txt, Args), ok=nkserver_trace:info(Id, Txt, Args)).
-%%-define(NOTICE_ID(Id, Txt), ok=nkserver_trace:notice(Id, Txt)).
-%%-define(NOTICE_ID(Id, Txt, Args), ok=nkserver_trace:notice(Id, Txt, Args)).
-%%-define(WARNING_ID(Id, Txt), ok=nkserver_trace:warning(Id, Txt)).
-%%-define(WARNING_ID(Id, Txt, Args), ok=nkserver_trace:warning(Id, Txt, Args)).
-%%-define(ERROR_ID(Id, Txt), ok=nkserver_trace:error(Id, Txt)).
-%%-define(ERROR_ID(Id, Txt, Args), ok=nkserver_trace:error(Id, Txt, Args)).
-%%-define(STATUS_ID(Id, Level, Status), ok=nkserver_trace:status(Id, Level, Status)).
-%%-define(TAGS_ID(Id, Tags), ok=nkserver_trace:tags(Id, Tags)).
-%%-define(TRACE_ID(Id, Audit), ok=nkserver_trace:trace(Id, Audit)).
-
 
 -endif.
 
