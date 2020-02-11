@@ -301,8 +301,8 @@ span_finish(_SrvId, _Span) ->
 -spec trace_event(id(), term(), nkserver_trace:event_type(), map()) ->
     any().
 
-trace_event(SrvId, _Group, Type, _Meta) ->
-    lager:info("Service '~s' EVT ~s", [SrvId, Type]).
+trace_event(SrvId, _Group, Type, Meta) ->
+    lager:info("Service '~s' EVT ~s (~p)", [SrvId, Type, Meta]).
 
 
 %% @doc Called when nkserver_trace:log/2,3 is called
