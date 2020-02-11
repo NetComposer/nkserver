@@ -19,16 +19,12 @@
 %% -------------------------------------------------------------------
 
 
-%% @doc These functions are useful if nkserver_ot and nkserver_audit are installed
-
+%% @doc Basic tracing support
 -module(nkserver_trace).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([span_run/4, span_push/1, span_pop/0, span_peak/0]).
--export([event/3, event/4, log/4, log/5, log/6, tags/3]).
+-export([new/2, new/3, new/4, error/1, tags/1, last_span/0]).
+-export([event/1, event/2, log/2, log/3, log/4]).
 -export([level_to_name/1, name_to_level/1, flatten_tags/1]).
-
-%%-export([start/5, debug/2, debug/3, info/2, info/3, notice/2, notice/3, warning/2, warning/3]).
-%%-export([trace/2, error/2, error/3, tags/2, status/3, log/3, log/4]).
 
 -include("nkserver.hrl").
 -include("nkserver_trace.hrl").
@@ -42,14 +38,47 @@
 -type level() :: debug | info | notice | warning | error.
 
 
-
-%% @doc
--spec span_run(nkserver:id(), term(), fun(), any()) ->
+%% @doc Starts a new span
+-spec new(nkserver:id()|same, term()) ->
     any().
 
-span_run(SrvId, SpanId, Fun, Opts) ->
-    case ?CALL_SRV(SrvId, span_create, [SrvId, SpanId, Opts]) of
+new(SrvId, SpanId) ->
+    new(SrvId, SpanId, infinity).
+
+
+%% @doc Starts a new span
+-spec new(nkserver:id(), term(), fun()|infinity) ->
+    any().
+
+new(SrvId, SpanId, Fun) ->
+    new(SrvId, SpanId, Fun, #{}).
+
+
+%% @doc Starts a new span
+%% By default, it only executes the fun, capturing exceptions
+%% Additional init can be done in callback trace_new. You can, inside it:
+%% - start a ot span
+%% - push a span configuration calling span_push
+-spec new(nkserver:id(), term(), fun()|infinity, any()) ->
+    any().
+
+new(same, SpanId, Fun, Opts) ->
+    case last_span() of
+        {SrvId, _} when SrvId /= same ->
+            new(SrvId, SpanId, Fun, Opts);
+        _ when Fun == infinity ->
+            ok;
+        _ ->
+            Fun()
+    end;
+
+new(SrvId, SpanId, Fun, Opts) ->
+    case ?CALL_SRV(SrvId, trace_new, [SrvId, SpanId, Opts]) of
+        {ok, Span} when Fun == infinity ->
+            do_span_push(SrvId, Span),
+            ok;
         {ok, Span} ->
+            do_span_push(SrvId, Span),
             try
                 Fun()
             catch
@@ -59,10 +88,11 @@ span_run(SrvId, SpanId, Fun, Opts) ->
                         reason => nklib_util:to_binary(Reason),
                         stack => nklib_util:to_binary(Stack)
                     },
-                    log(SrvId, Span, warning, trace_exception, Data),
+                    log(warning, trace_exception, Data),
                     erlang:raise(Class, Reason, Stack)
             after
-                span_finish(SrvId, Span)
+                _ = do_span_pop(),
+                finish(SrvId, Span)
             end;
         {error, Error} ->
             {error, {trace_creation_error, Error}}
@@ -70,109 +100,116 @@ span_run(SrvId, SpanId, Fun, Opts) ->
 
 
 %% @doc Finishes a started trace. You don't need to call it directly
--spec span_finish(nkserver:id(), span()) ->
+-spec finish(nkserver:id(), span()) ->
     any().
 
-span_finish(SrvId, Span) ->
-    ?CALL_SRV(SrvId, span_finish, [SrvId, Span]).
-
-
-%% @doc
-span_push(Span) ->
-    Spans = case erlang:get(nkserver_spans) of
-        undefined -> [];
-        Spans0 -> Spans0
-    end,
-    erlang:put(nkserver_spans, [Span|Spans]).
-
-
-%% @doc
-span_pop() ->
-    case erlang:get(nkserver_spans) of
-        [Span|Spans] ->
-            erlang:put(nkserver_spans, Spans),
-            Span;
-        _ ->
-            undefined
-    end.
-
-
-%% @doc
-span_peak() ->
-    case erlang:get(nkserver_spans) of
-        undefined -> undefined;
-        [Span|_] -> Span
-    end.
+finish(SrvId, Span) ->
+    ?CALL_SRV(SrvId, trace_finish, [Span]).
 
 
 %% @doc Generates a new trace event
--spec event(nkserver:id(), term(), term()) ->
+%% It calls callback trace_event.
+%% By default, it will only log the event
+-spec event(term()) ->
     any().
 
-event(SrvId, Group, Type) ->
-    event(SrvId, Group, Type, #{}).
+event(Type) ->
+    event(Type, #{}).
 
 
 %% @doc Generates a new trace event
-%% Log should never cause an exception
--spec event(nkserver:id(), term(), term(), map()) ->
+%% It calls callback trace_event.
+%% By default, it will only log the event
+-spec event(term(), map()) ->
     ok.
 
-event(SrvId, Group, Type, Data) when is_map(Data) ->
-    try
-        ?CALL_SRV(SrvId, trace_event, [SrvId, Group, Type, Data])
-    catch
-        Class:Reason:Stack ->
-            lager:warning("Exception calling nkserver_trace:event() ~p ~p (~p)", [Class, Reason, Stack])
+event(Type, Meta) when is_map(Meta) ->
+    case last_span() of
+        {SrvId, Span} ->
+            try
+                ?CALL_SRV(SrvId, trace_event, [Type, Meta, Span])
+            catch
+                Class:Reason:Stack ->
+                    lager:warning("Exception calling nkserver_trace:event() ~p ~p (~p)", [Class, Reason, Stack])
+            end;
+        undefined ->
+            lager:info("NkSERVER EVT ~s (~p)", [Type, Meta])
     end.
 
 
 %% @doc Generates a new log entry
--spec log(nkserver:id(), term(), level(), string()) ->
+-spec log(level(), string()) ->
     any().
 
-log(SrvId, Group, Level, Txt) when is_atom(Level), is_list(Txt) ->
-    log(SrvId, Group, Level, Txt, [], #{}).
+log(Level, Txt) when is_atom(Level), is_list(Txt) ->
+    log(Level, Txt, [], #{}).
 
 
 %% @doc Generates a new log entry
--spec log(nkserver:id(), term(), level(), string(), list()|map()) ->
+-spec log(level(), string(), list()|map()) ->
     any().
 
-log(SrvId, Group, Level, Txt, Args) when is_atom(Level), is_list(Txt), is_list(Args) ->
-    log(SrvId, Group, Level, Txt, Args, #{});
+log(Level, Txt, Args) when is_atom(Level), is_list(Txt), is_list(Args) ->
+    log(Level, Txt, Args, #{});
 
-log(SrvId, Group, Level, Txt, Data) when is_atom(Level), is_list(Txt), is_map(Data) ->
-    log(SrvId, Group, Level, Txt, [], #{}).
+log(Level, Txt, Meta) when is_atom(Level), is_list(Txt), is_map(Meta) ->
+    log(Level, Txt, [], #{}).
 
 
-%% @doc Generates a new trace entry
-%% Log should never cause an exception
--spec log(nkserver:id(), term(), level(), string(), list(), map()) ->
+%% @doc Generates a new log entry
+%% It calls callback trace_log
+%% By default, it will only log the event
+-spec log(level(), string(), list(), map()) ->
     any().
 
-log(SrvId, Group, Level, Txt, Args, Data)
-        when is_atom(Level), is_list(Txt), is_list(Args), is_map(Data) ->
-    try
-        ?CALL_SRV(SrvId, trace_log, [SrvId, Group, Level, Txt, Args, Data])
-    catch
-        Class:Reason:Stack ->
-            lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
+log(Level, Txt, Args, Meta) when is_atom(Level), is_list(Txt), is_list(Args), is_map(Meta) ->
+    case last_span() of
+        {SrvId, Span} ->
+            try
+                ?CALL_SRV(SrvId, trace_log, [Level, Txt, Args, Meta, Span])
+            catch
+                Class:Reason:Stack ->
+                    lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
+            end;
+        undefined ->
+            lager:log(Level, [], "NkSERVER LOG "++Txt, Args)
+    end.
+
+
+%% @doc Mark an span as error
+-spec error(nkserver:status()) ->
+    any().
+
+error(Error) ->
+    case last_span() of
+        {SrvId, Span} ->
+            try
+                ?CALL_SRV(SrvId, trace_error, [Error, Span])
+            catch
+                Class:Reason:Stack ->
+                    lager:warning("Exception calling nkserver_trace:span_error() ~p ~p (~p)", [Class, Reason, Stack])
+            end;
+        undefined ->
+            ok
     end.
 
 
 %% @doc Adds a number of tags to a trace
--spec tags(nkserver:id(), term(), map()) ->
+-spec tags(map()) ->
     any().
 
-tags(SrvId, Group, Tags) ->
-    try
-        ?CALL_SRV(SrvId, trace_tags, [SrvId, Group, Tags])
-    catch
-        Class:Reason:Stack ->
-            lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
+tags(Tags) ->
+    case last_span() of
+        {SrvId, Span} ->
+            try
+                ?CALL_SRV(SrvId, trace_tags, [Tags, Span])
+            catch
+                Class:Reason:Stack ->
+                    lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
+            end;
+        undefined ->
+            ok
     end.
-
 
 
 %% @doc
@@ -227,6 +264,37 @@ do_flatten_tags([{Key, Val}|Rest], Prefix, Acc) ->
             [{Key2, to_bin(Val)}|Acc]
     end,
     do_flatten_tags(Rest, Prefix, Acc2).
+
+
+%% @doc
+last_span() ->
+    case erlang:get(nkserver_spans) of
+        undefined -> undefined;
+        [] -> undefined;
+        [{SrvId, Span}|_] -> {SrvId, Span}
+    end.
+
+
+%% @doc Pushes a spain information to the process dictionary
+%% nkserver is not going to use it by default, use it in your
+%% trace_event and trace_log callbacks
+do_span_push(SrvId, Span) ->
+    Spans = case erlang:get(nkserver_spans) of
+        undefined -> [];
+        Spans0 -> Spans0
+    end,
+    erlang:put(nkserver_spans, [{SrvId, Span}|Spans]).
+
+
+%% @doc
+do_span_pop() ->
+    case erlang:get(nkserver_spans) of
+        [{SrvId, Span}|Spans] ->
+            erlang:put(nkserver_spans, Spans),
+            {SrvId, Span};
+        _ ->
+            undefined
+    end.
 
 
 %% @private

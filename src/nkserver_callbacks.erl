@@ -28,7 +28,8 @@
 -export([srv_master_init/2, srv_master_handle_call/4, srv_master_handle_cast/3,
          srv_master_handle_info/3, srv_master_code_change/4, srv_master_terminate/3,
          srv_master_timed_check/3, srv_master_become_leader/2]).
--export([span_create/3, span_finish/2, trace_event/4, trace_log/6, trace_tags/3]).
+-export([trace_new/3, trace_finish/1, trace_error/2,
+         trace_event/3, trace_log/5, trace_tags/2]).
 -export_type([continue/0]).
 
 -include("nkserver.hrl").
@@ -283,41 +284,49 @@ srv_master_become_leader(SrvId, State) ->
 %% By default it returns a trace {nkserver_trace, Name} that is
 %% showed on screen with nkserver_trace:log/2,3
 
--spec span_create(id(), term(), nkserver_trace:run_opts()) ->
+-spec trace_new(nkserver:id(), term(), nkserver_trace:run_opts()) ->
     {ok, nkserver_trace:span()}.
 
-span_create(_SrvId, SpanId, _Opts) ->
+trace_new(_SrvId, SpanId, _Opts) ->
     {ok, SpanId}.
 
 
 %% @doc Called when nkserver_trace:finish/1 is called, to finishes a started trace.
--spec span_finish(id(), nkserver_trace:span()) -> any().
+-spec trace_finish(nkserver_trace:span()) -> any().
 
-span_finish(_SrvId, _Span) ->
+trace_finish(_Span) ->
     ok.
 
 
-%% @doc Called when nkserver_trace:event/2,3 is called
--spec trace_event(id(), term(), nkserver_trace:event_type(), map()) ->
+%% @doc Called when nkserver_trace:span_error/3 is called
+-spec trace_error(nkserver:status(), nkserver_trace:span()) ->
     any().
 
-trace_event(SrvId, _Group, Type, Meta) ->
-    lager:info("Service '~s' EVT ~s (~p)", [SrvId, Type, Meta]).
+trace_error(Error, _Span) ->
+    lager:info("NkSERVER Span ERROR: ~s", [Error]).
+
+
+%% @doc Called when nkserver_trace:event/2,3 is called
+-spec trace_event(nkserver_trace:event_type(), map(), nkserver_trace:span()) ->
+    any().
+
+trace_event(Type, Meta, _Span) ->
+    lager:info("NkSERVER EVT ~s (~p)", [Type, Meta]).
 
 
 %% @doc Called when nkserver_trace:log/2,3 is called
 %% It can do any processing
 
--spec trace_log(id(), term(), nkserver_trace:level(), string(), list(), map()) ->
+-spec trace_log(nkserver_trace:level(), string(), list(), map(), nkserver_trace:span()) ->
     any().
 
-trace_log(SrvId, _Group, Level, Txt, Args, _Meta) ->
-    lager:log(Level, [], "Service '~s' LOG "++Txt, [SrvId|Args]).
+trace_log(Level, Txt, Args, _Meta, _Span) ->
+    lager:log(Level, [], "NkSERVER LOG "++Txt, Args).
 
 
 %% @doc Adds a number of tags to a trace
--spec trace_tags(id(), term(), map()) -> any().
+-spec trace_tags(map(), nkserver_trace:span()) -> any().
 
-trace_tags(SrvId, _Group, Tags) ->
-    lager:debug("Service '~s' TAGS ~p", [SrvId, Tags]).
+trace_tags(_Tags, _Span) ->
+    ok.
 
