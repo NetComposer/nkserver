@@ -28,7 +28,7 @@
 -export([srv_master_init/2, srv_master_handle_call/4, srv_master_handle_cast/3,
          srv_master_handle_info/3, srv_master_code_change/4, srv_master_terminate/3,
          srv_master_timed_check/3, srv_master_become_leader/2]).
--export([trace_new/3, trace_finish/1, trace_update/2, trace_parent/1,
+-export([trace_new_span/3, trace_finish_span/1, trace_update_span/2, trace_span_parent/1,
          trace_error/2, trace_trace/4, trace_event/3, trace_log/5, trace_tags/2]).
 -export_type([continue/0]).
 
@@ -284,31 +284,31 @@ srv_master_become_leader(SrvId, State) ->
 %% By default it returns a trace {nkserver_trace, Name} that is
 %% showed on screen with nkserver_trace:log/2,3
 
--spec trace_new(nkserver:id(), term(), nkserver_trace:run_opts()) ->
+-spec trace_new_span(nkserver:id(), term(), nkserver_trace:run_opts()) ->
     {ok, nkserver_trace:span()}.
 
-trace_new(_SrvId, SpanId, _Opts) ->
+trace_new_span(_SrvId, SpanId, _Opts) ->
     {ok, SpanId}.
 
 
 %% @doc Called when nkserver_trace:finish/1 is called, to finishes a started trace.
--spec trace_update(term(), nkserver_trace:span()) -> any().
+-spec trace_update_span(term(), nkserver_trace:span()) -> any().
 
-trace_update(_Updates, _Span) ->
+trace_update_span(_Updates, _Span) ->
     ok.
 
 
 %% @doc Called when nkserver_trace:finish/1 is called, to finishes a started trace.
--spec trace_parent(nkserver_trace:span()) -> nkserver_trace:parent() | undefined.
+-spec trace_span_parent(nkserver_trace:span()) -> nkserver_trace:parent() | undefined.
 
-trace_parent(_Span) ->
+trace_span_parent(_Span) ->
     undefined.
 
 
 %% @doc Called when nkserver_trace:finish/1 is called, to finishes a started trace.
--spec trace_finish(nkserver_trace:span()) -> any().
+-spec trace_finish_span(nkserver_trace:span()) -> any().
 
-trace_finish(_Span) ->
+trace_finish_span(_Span) ->
     ok.
 
 

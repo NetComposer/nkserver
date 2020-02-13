@@ -22,7 +22,7 @@
 %% @doc Basic tracing support
 -module(nkserver_trace).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([new/2, new/3, new/4, update/1, parent/0]).
+-export([new_span/2, new_span/3, new_span/4, update_span/1, span_parent/0]).
 -export([error/1, tags/1, get_last_span/0]).
 -export([trace/1, trace/2, trace/3]).
 -export([event/1, event/2, log/2, log/3, log/4]).
@@ -46,41 +46,41 @@
     }.
 
 %% @doc Starts a new span
--spec new(nkserver:id()|last, term()) ->
+-spec new_span(nkserver:id()|last, term()) ->
     any().
 
-new(SrvId, SpanId) ->
-    new(SrvId, SpanId, infinity).
+new_span(SrvId, SpanId) ->
+    new_span(SrvId, SpanId, infinity).
 
 
 %% @doc Starts a new span
--spec new(nkserver:id()|last, term(), fun()|infinity) ->
+-spec new_span(nkserver:id()|last, term(), fun()|infinity) ->
     any().
 
-new(SrvId, SpanId, Fun) ->
-    new(SrvId, SpanId, Fun, #{}).
+new_span(SrvId, SpanId, Fun) ->
+    new_span(SrvId, SpanId, Fun, #{}).
 
 
 %% @doc Starts a new span
 %% By default, it only executes the fun, capturing exceptions
-%% Additional init can be done in callback trace_new. You can, inside it:
+%% Additional init can be done in callback trace_new_span. You can, inside it:
 %% - start a ot span
 %% - push a span configuration calling span_push
--spec new(nkserver:id()|last, term(), fun()|infinity, new_opts()) ->
+-spec new_span(nkserver:id()|last, term(), fun()|infinity, new_opts()) ->
     any().
 
-new(last, SpanId, Fun, Opts) ->
+new_span(last, SpanId, Fun, Opts) ->
     case get_last_span() of
         {SrvId, _} when SrvId /= last ->
-            new(SrvId, SpanId, Fun, Opts);
+            new_span(SrvId, SpanId, Fun, Opts);
         _ when Fun == infinity ->
             ok;
         _ ->
             Fun()
     end;
 
-new(SrvId, SpanId, Fun, Opts) ->
-    case ?CALL_SRV(SrvId, trace_new, [SrvId, SpanId, Opts]) of
+new_span(SrvId, SpanId, Fun, Opts) ->
+    case ?CALL_SRV(SrvId, trace_new_span, [SrvId, SpanId, Opts]) of
         {ok, Span} when Fun == infinity ->
             do_span_push(SrvId, Span),
             ok;
@@ -94,7 +94,7 @@ new(SrvId, SpanId, Fun, Opts) ->
                     erlang:raise(Class, Reason, Stack)
             after
                 _ = do_span_pop(),
-                finish(SrvId, Span)
+                finish_span(SrvId, Span)
             end;
         {error, Error} ->
             {error, {trace_creation_error, Error}}
@@ -102,22 +102,22 @@ new(SrvId, SpanId, Fun, Opts) ->
 
 
 %% @doc Finishes a started trace. You don't need to call it directly
--spec finish(nkserver:id(), span()) ->
+-spec finish_span(nkserver:id(), span()) ->
     any().
 
-finish(SrvId, Span) ->
-    ?CALL_SRV(SrvId, trace_finish, [Span]).
+finish_span(SrvId, Span) ->
+    ?CALL_SRV(SrvId, trace_finish_span, [Span]).
 
 
 %% @doc Perform a number of updates operations on a span
--spec update(list()) ->
+-spec update_span(list()) ->
     ok.
 
-update(Operations) ->
+update_span(Operations) ->
     case get_last_span() of
         {SrvId, Span} ->
             try
-                ?CALL_SRV(SrvId, trace_update, [Operations, Span])
+                ?CALL_SRV(SrvId, trace_update_span, [Operations, Span])
             catch
                 Class:Reason:Stack ->
                     lager:warning("Exception calling nkserver_trace:update() ~p ~p (~p)", [Class, Reason, Stack])
@@ -129,14 +129,14 @@ update(Operations) ->
 
 
 %% @doc Extract the parent of a span, to be used on a new one
--spec parent() ->
+-spec span_parent() ->
     parent() | undefined.
 
-parent() ->
+span_parent() ->
     case get_last_span() of
         {SrvId, Span} ->
             try
-                ?CALL_SRV(SrvId, trace_parent, [Span])
+                ?CALL_SRV(SrvId, trace_span_parent, [Span])
             catch
                 Class:Reason:Stack ->
                     lager:warning("Exception calling nkserver_trace:update() ~p ~p (~p)", [Class, Reason, Stack])
