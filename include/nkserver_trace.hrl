@@ -25,6 +25,15 @@
 %% Defines
 %% ===================================================================
 
+-define(LEVEL_DEBUG, 1).
+-define(LEVEL_TRACE, 2).
+-define(LEVEL_INFO, 3).
+-define(LEVEL_EVENT, 4).
+-define(LEVEL_NOTICE, 5).
+-define(LEVEL_WARNING, 6).
+-define(LEVEL_ERROR, 7).
+-define(LEVEL_OFF, 9).
+
 
 -endif.
 

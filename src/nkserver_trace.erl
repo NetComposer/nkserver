@@ -26,7 +26,7 @@
 -export([error/1, tags/1, get_last_span/0]).
 -export([trace/1, trace/2, trace/3]).
 -export([event/1, event/2, log/2, log/3, log/4]).
--export([level_to_name/1, name_to_level/1, flatten_tags/1]).
+-export([level_to_name/1, name_to_level/1, level_to_lager/1, flatten_tags/1]).
 
 -include("nkserver.hrl").
 -include("nkserver_trace.hrl").
@@ -36,7 +36,6 @@
 %% Public
 %% ===================================================================
 
--type span() :: term().
 -type level() :: debug | info | notice | warning | error.
 -type parent() :: term().
 -type new_opts() ::
@@ -93,19 +92,20 @@ new_span(SrvId, SpanId, Fun, Opts) ->
                     log(warning, "Trace exception '~s' (~p) (~p)", [Class, Reason, Stack]),
                     erlang:raise(Class, Reason, Stack)
             after
-                _ = do_span_pop(),
-                finish_span(SrvId, Span)
+                finish_span()
             end;
         {error, Error} ->
             {error, {trace_creation_error, Error}}
     end.
 
 
-%% @doc Finishes a started trace. You don't need to call it directly
--spec finish_span(nkserver:id(), span()) ->
+%% @doc Finishes a started trace. You don't need to call it directly,
+%% unless you start a 'infinity' span
+-spec finish_span() ->
     any().
 
-finish_span(SrvId, Span) ->
+finish_span() ->
+    {SrvId, Span} = do_span_pop(),
     ?CALL_SRV(SrvId, trace_finish_span, [Span]).
 
 
@@ -173,7 +173,7 @@ event(Type, Meta) when is_map(Meta) ->
             end;
         undefined ->
             % Event without active span are printed as debug
-            lager:debug("NkSERVER EVENT ~s (~p)", [Type, Meta])
+            lager:debug("Trace EVENT ~s (~p)", [Type, Meta])
     end.
 
 
@@ -214,7 +214,7 @@ trace(Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
             ok;
         undefined ->
             % Traces without active span are printed as debug
-            lager:debug("NkSERVER TRACE "++Txt, Args)
+            lager:debug("TRACE "++Txt, Args)
     end.
 
 
@@ -257,7 +257,7 @@ log(Level, Txt, Args, Meta) when is_atom(Level), is_list(Txt), is_list(Args), is
                     ok;
                 undefined ->
                     % Logs without active span are printed with desired level
-                    lager:log(Level, [], "NkSERVER LOG "++Txt, Args)
+                    lager:log(Level, [], "Trace LOG "++Txt, Args)
             end;
         false ->
             lager:error("Invalid log level: ~p", [Level])
@@ -279,7 +279,7 @@ error(Error) ->
                     lager:warning("Exception calling nkserver_trace:span_error() ~p ~p (~p)", [Class, Reason, Stack])
             end;
         undefined ->
-            ok
+            lager:notice("Trace ERROR: ~p", [Error])
     end.
 
 
@@ -298,35 +298,39 @@ tags(Tags) ->
                     lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
             end;
         undefined ->
-            ok
+            lager:debug("Trace TAGS: ~p", [Tags])
     end.
 
 
 %% @doc
-level_to_name(1) -> debug;
-level_to_name(2) -> info;
-level_to_name(3) -> notice;
-level_to_name(4) -> warning;
-level_to_name(5) -> error;
-level_to_name(debug) -> debug;
-level_to_name(info) -> info;
-level_to_name(notice) -> notice;
-level_to_name(warning) -> warning;
-level_to_name(error) -> error;
-level_to_name(_) -> error.
+level_to_name(?LEVEL_DEBUG) -> debug;
+level_to_name(?LEVEL_TRACE) -> trace;
+level_to_name(?LEVEL_INFO) -> info;
+level_to_name(?LEVEL_EVENT) -> event;
+level_to_name(?LEVEL_NOTICE) -> notice;
+level_to_name(?LEVEL_WARNING) -> warning;
+level_to_name(?LEVEL_ERROR) -> error;
+level_to_name(?LEVEL_OFF) -> off.
 
 
 %% @doc
-name_to_level(1) -> 1;
-name_to_level(2) -> 2;
-name_to_level(3) -> 3;
-name_to_level(4) -> 4;
-name_to_level(5) -> 5;
-name_to_level(debug) -> 1;
-name_to_level(info) -> 2;
-name_to_level(notice) -> 3;
-name_to_level(warning) -> 4;
-name_to_level(error) -> 5.
+name_to_level(debug) -> ?LEVEL_DEBUG;
+name_to_level(trace) -> ?LEVEL_TRACE;
+name_to_level(info) -> ?LEVEL_INFO;
+name_to_level(event) -> ?LEVEL_EVENT;
+name_to_level(notice) -> ?LEVEL_NOTICE;
+name_to_level(warning) -> ?LEVEL_WARNING;
+name_to_level(error) -> ?LEVEL_ERROR;
+name_to_level(off) -> ?LEVEL_OFF.
+
+%% @doc
+level_to_lager(?LEVEL_DEBUG) -> debug;
+level_to_lager(?LEVEL_TRACE) -> debug;
+level_to_lager(?LEVEL_INFO) -> info;
+level_to_lager(?LEVEL_EVENT) -> info;
+level_to_lager(?LEVEL_NOTICE) -> notice;
+level_to_lager(?LEVEL_WARNING) -> warning;
+level_to_lager(?LEVEL_ERROR) -> error.
 
 
 %% @doc
