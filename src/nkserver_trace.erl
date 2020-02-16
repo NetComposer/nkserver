@@ -22,7 +22,7 @@
 %% @doc Basic tracing support
 -module(nkserver_trace).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([new_span/2, new_span/3, new_span/4, update_span/1, span_parent/0]).
+-export([new_span/2, new_span/3, new_span/4, finish_span/0, update_span/1, span_parent/0]).
 -export([error/1, tags/1, get_last_span/0]).
 -export([trace/1, trace/2, trace/3]).
 -export([event/1, event/2, log/2, log/3, log/4]).
@@ -36,7 +36,7 @@
 %% Public
 %% ===================================================================
 
--type level() :: debug | info | notice | warning | error.
+-type level() :: debug | trace | info | event | notice | warning | error.
 -type parent() :: term().
 -type new_opts() ::
     #{

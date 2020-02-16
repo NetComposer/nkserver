@@ -325,7 +325,7 @@ trace_error(Error, _Span) ->
     any().
 
 trace_event(Type, Meta, _Span) ->
-    lager:info("NkSERVER EVT ~s (~p)", [Type, Meta]).
+    lager:debug("NkSERVER EVT ~s (~p)", [Type, Meta]).
 
 
 %% @doc Called when nkserver_trace:log/2,3 is called
