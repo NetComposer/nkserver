@@ -29,7 +29,7 @@
          srv_master_handle_info/3, srv_master_code_change/4, srv_master_terminate/3,
          srv_master_timed_check/3, srv_master_become_leader/2]).
 -export([trace_new_span/3, trace_finish_span/1, trace_update_span/2, trace_span_parent/1,
-         trace_error/2, trace_trace/4, trace_event/3, trace_log/5, trace_tags/2]).
+         trace_error/2, trace_trace/4, trace_event/5, trace_log/5, trace_tags/2]).
 -export_type([continue/0]).
 
 -include("nkserver.hrl").
@@ -321,11 +321,16 @@ trace_error(Error, _Span) ->
 
 
 %% @doc Called when nkserver_trace:event/2,3 is called
--spec trace_event(nkserver_trace:event_type(), map(), nkserver_trace:span()) ->
+-spec trace_event(nkserver_trace:event_type(), list(), list(), map(), nkserver_trace:span()) ->
     any().
 
-trace_event(Type, Meta, _Span) ->
-    lager:debug("NkSERVER EVT ~s (~p)", [Type, Meta]).
+trace_event(Type, Txt, Args, Meta, _Span) ->
+    case Txt of
+        [] ->
+            lager:debug("NkSERVER EVT ~s (~p)", [Type, Meta]);
+        _ ->
+            lager:debug("NkSERVER EVT ~s "++Txt++ " (~p)", [Type|Args]++[Meta])
+    end.
 
 
 %% @doc Called when nkserver_trace:log/2,3 is called

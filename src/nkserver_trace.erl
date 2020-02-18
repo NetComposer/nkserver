@@ -25,7 +25,7 @@
 -export([new_span/2, new_span/3, new_span/4, finish_span/0, update_span/1, span_parent/0]).
 -export([error/1, tags/1, get_last_span/0]).
 -export([trace/1, trace/2, trace/3]).
--export([event/1, event/2, log/2, log/3, log/4]).
+-export([event/1, event/2, event/3, event/4, log/2, log/3, log/4]).
 -export([level_to_name/1, name_to_level/1, level_to_lager/1, flatten_tags/1]).
 
 -include("nkserver.hrl").
@@ -105,8 +105,12 @@ new_span(SrvId, SpanId, Fun, Opts) ->
     any().
 
 finish_span() ->
+    %lager:error("NKLOG DO FINISH1a"),
     {SrvId, Span} = do_span_pop(),
-    ?CALL_SRV(SrvId, trace_finish_span, [Span]).
+    %lager:error("NKLOG DO FINISH1b"),
+    ?CALL_SRV(SrvId, trace_finish_span, [Span]),
+    %lager:error("NKLOG DO FINISH1c"),
+    ok.
 
 
 %% @doc Perform a number of updates operations on a span
@@ -163,10 +167,31 @@ event(Type) ->
     ok.
 
 event(Type, Meta) when is_map(Meta) ->
+    event(Type, [], [], Meta).
+
+
+
+%% @doc Generates a new trace event
+%% It calls callback trace_event.
+%% By default, it will only log the event
+-spec event(term(), list(), map()) ->
+    ok.
+
+event(Type, Txt, Meta) when is_map(Meta), is_list(Txt) ->
+    event(Type, Txt, [], Meta).
+
+
+%% @doc Generates a new trace event
+%% It calls callback trace_event.
+%% By default, it will only log the event
+-spec event(term(), list(), list(), map()) ->
+    ok.
+
+event(Type, Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
     case get_last_span() of
         {SrvId, Span} ->
             try
-                ?CALL_SRV(SrvId, trace_event, [Type, Meta, Span])
+                ?CALL_SRV(SrvId, trace_event, [Type, Txt, Args, Meta, Span])
             catch
                 Class:Reason:Stack ->
                     lager:warning("Exception calling nkserver_trace:event() ~p ~p (~p)", [Class, Reason, Stack])
