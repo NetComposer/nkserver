@@ -29,7 +29,7 @@
          srv_master_handle_info/3, srv_master_code_change/4, srv_master_terminate/3,
          srv_master_timed_check/3, srv_master_become_leader/2]).
 -export([trace_new_span/3, trace_finish_span/1, trace_update_span/2, trace_span_parent/1,
-         trace_error/2, trace_trace/4, trace_event/5, trace_log/5, trace_tags/2]).
+         trace_error/2, trace_trace/4, trace_event/5, trace_log/5, trace_tags/2, trace_clean/2]).
 -export_type([continue/0]).
 
 -include("nkserver.hrl").
@@ -359,3 +359,9 @@ trace_log(Level, Txt, Args, _Meta, _Span) ->
 trace_tags(_Tags, _Span) ->
     ok.
 
+%% @doc Cleans a message before tracing (to remove passwords, etc.)
+-spec trace_clean(any(), nkserver_trace:span()) ->
+    any().
+
+trace_clean(Msg, _Span) ->
+    Msg.

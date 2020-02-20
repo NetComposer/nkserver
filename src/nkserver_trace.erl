@@ -25,7 +25,7 @@
 -export([new_span/2, new_span/3, new_span/4, finish_span/0, update_span/1, span_parent/0]).
 -export([error/1, tags/1, get_last_span/0]).
 -export([trace/1, trace/2, trace/3]).
--export([event/1, event/2, event/3, event/4, log/2, log/3, log/4]).
+-export([event/1, event/2, event/3, event/4, log/2, log/3, log/4, clean/1]).
 -export([level_to_name/1, name_to_level/1, level_to_lager/1, flatten_tags/1]).
 
 -include("nkserver.hrl").
@@ -40,8 +40,8 @@
 -type parent() :: term().
 -type new_opts() ::
     #{
-        parent => parent(),
-        metadata => map()
+        parent => parent() | undefined | none,
+        term() => any()
     }.
 
 %% @doc Starts a new span
@@ -324,6 +324,24 @@ tags(Tags) ->
             end;
         undefined ->
             lager:debug("Trace TAGS: ~p", [Tags])
+    end.
+
+
+%% @doc Cleans a message before tracing (to remove passwords, etc.)
+-spec clean(any()) ->
+    any().
+
+clean(Msg) ->
+    case get_last_span() of
+        {SrvId, Span} ->
+            try
+                ?CALL_SRV(SrvId, trace_clean, [Msg, Span])
+            catch
+                Class:Reason:Stack ->
+                    lager:warning("Exception calling nkserver_trace:clean() ~p ~p (~p)", [Class, Reason, Stack])
+            end;
+        undefined ->
+            Msg
     end.
 
 
