@@ -24,8 +24,7 @@
 -export([make_span/4]).
 -export([new/3, finish/1, update/2, parent/1]).
 -export([log/5, event/5, trace/4, tags/2, error/2]).
--include_lib("nkactor/include/nkactor.hrl").
--include_lib("nkserver_trace.hrl").
+-include("nkserver_trace.hrl").
 
 %% @doc
 make_span(SpanId, Name, Levels, Meta) when is_list(Levels) ->
