@@ -383,7 +383,9 @@ name_to_level(event) -> ?LEVEL_EVENT;
 name_to_level(notice) -> ?LEVEL_NOTICE;
 name_to_level(warning) -> ?LEVEL_WARNING;
 name_to_level(error) -> ?LEVEL_ERROR;
-name_to_level(off) -> ?LEVEL_OFF.
+name_to_level(off) -> ?LEVEL_OFF;
+name_to_level(LevelNum) when is_integer(LevelNum), LevelNum>0, LevelNum<10 -> LevelNum.
+
 
 %% @doc
 level_to_lager(?LEVEL_DEBUG) -> debug;
