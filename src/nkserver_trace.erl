@@ -27,6 +27,7 @@
 -export([trace/1, trace/2, trace/3]).
 -export([event/1, event/2, event/3, event/4, log/2, log/3, log/4, clean/1]).
 -export([level_to_name/1, name_to_level/1, level_to_lager/1, flatten_tags/1]).
+-export_type([level_name/0, level_num/0, span/0, parent/0]).
 
 -include("nkserver.hrl").
 -include("nkserver_trace.hrl").
@@ -36,13 +37,12 @@
 %% Public
 %% ===================================================================
 
--type level() :: debug | trace | info | event | notice | warning | error.
+-type level_name() :: debug | trace | info | event | notice | warning | error.
+-type level_num() :: 1..9.
+-type span() :: #nkserver_span{}.
+
 -type parent() :: term().
--type new_opts() ::
-    #{
-        parent => parent() | undefined | none,
-        term() => any()
-    }.
+-type new_opts() :: map().
 
 %% @doc Starts a new span
 -spec new_span(nkserver:id()|last, term()) ->
@@ -80,10 +80,10 @@ new_span(last, SpanId, Fun, Opts) ->
 
 new_span(SrvId, SpanId, Fun, Opts) ->
     case ?CALL_SRV(SrvId, trace_new_span, [SrvId, SpanId, Opts]) of
-        {ok, Span} when Fun == infinity ->
+        {ok, #nkserver_span{}=Span} when Fun == infinity ->
             do_span_push(SrvId, Span),
             ok;
-        {ok, Span} ->
+        {ok, #nkserver_span{}=Span} ->
             do_span_push(SrvId, Span),
             try
                 Fun()
@@ -94,6 +94,9 @@ new_span(SrvId, SpanId, Fun, Opts) ->
             after
                 finish_span()
             end;
+        {ok, SpanId2} ->
+
+            nkserver_trace_lib:make_span(SpanId2, <<>>, [], #{});
         {error, Error} ->
             {error, {trace_creation_error, Error}}
     end.
@@ -105,11 +108,8 @@ new_span(SrvId, SpanId, Fun, Opts) ->
     any().
 
 finish_span() ->
-    %lager:error("NKLOG DO FINISH1a"),
     {SrvId, Span} = do_span_pop(),
-    %lager:error("NKLOG DO FINISH1b"),
     ?CALL_SRV(SrvId, trace_finish_span, [Span]),
-    %lager:error("NKLOG DO FINISH1c"),
     ok.
 
 
@@ -190,11 +190,16 @@ event(Type, Txt, Meta) when is_map(Meta), is_list(Txt) ->
 event(Type, Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
     case get_last_span() of
         {SrvId, Span} ->
-            try
-                ?CALL_SRV(SrvId, trace_event, [Type, Txt, Args, Meta, Span])
-            catch
-                Class:Reason:Stack ->
-                    lager:warning("Exception calling nkserver_trace:event() ~p ~p (~p)", [Class, Reason, Stack])
+            case has_level(?LEVEL_EVENT, Span) of
+                true ->
+                    try
+                        ?CALL_SRV(SrvId, trace_event, [Type, Txt, Args, Meta, Span])
+                    catch
+                        Class:Reason:Stack ->
+                            lager:warning("Exception calling nkserver_trace:event() ~p ~p (~p)", [Class, Reason, Stack])
+                    end;
+                false ->
+                    ok
             end;
         undefined ->
             % Event without active span are printed as debug
@@ -230,13 +235,17 @@ trace(Txt, Meta) when is_list(Txt), is_map(Meta) ->
 trace(Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
     case get_last_span() of
         {SrvId, Span} ->
-            try
-                ?CALL_SRV(SrvId, trace_trace, [Txt, Args, Meta, Span])
-            catch
-                Class:Reason:Stack ->
-                    lager:warning("Exception calling nkserver_trace:trace() ~p ~p (~p)", [Class, Reason, Stack])
-            end,
-            ok;
+            case has_level(?LEVEL_TRACE, Span) of
+                true ->
+                    try
+                        ?CALL_SRV(SrvId, trace_trace, [Txt, Args, Meta, Span])
+                    catch
+                        Class:Reason:Stack ->
+                            lager:warning("Exception calling nkserver_trace:trace() ~p ~p (~p)", [Class, Reason, Stack])
+                    end;
+                false ->
+                    ok
+            end;
         undefined ->
             % Traces without active span are printed as debug
             lager:debug("TRACE "++Txt, Args)
@@ -244,7 +253,7 @@ trace(Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
 
 
 %% @doc Generates a new log entry
--spec log(level(), string()) ->
+-spec log(level_name(), string()) ->
     any().
 
 log(Level, Txt) when is_atom(Level), is_list(Txt) ->
@@ -252,7 +261,7 @@ log(Level, Txt) when is_atom(Level), is_list(Txt) ->
 
 
 %% @doc Generates a new log entry
--spec log(level(), string(), list()|map()) ->
+-spec log(level_name(), string(), list()|map()) ->
     any().
 
 log(Level, Txt, Args) when is_atom(Level), is_list(Txt), is_list(Args) ->
@@ -265,7 +274,7 @@ log(Level, Txt, Meta) when is_atom(Level), is_list(Txt), is_map(Meta) ->
 %% @doc Generates a new log entry
 %% It calls callback trace_log
 %% By default, it will only log the event
--spec log(level(), string(), list(), map()) ->
+-spec log(level_name(), string(), list(), map()) ->
     any().
 
 log(Level, Txt, Args, Meta) when is_atom(Level), is_list(Txt), is_list(Args), is_map(Meta) ->
@@ -273,13 +282,18 @@ log(Level, Txt, Args, Meta) when is_atom(Level), is_list(Txt), is_list(Args), is
         true ->
             case get_last_span() of
                 {SrvId, Span} ->
-                    try
-                        ?CALL_SRV(SrvId, trace_log, [Level, Txt, Args, Meta, Span])
-                    catch
-                        Class:Reason:Stack ->
-                            lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
-                    end,
-                    ok;
+                    Level2 = name_to_level(Level),
+                    case has_level(Level2, Span) of
+                        true ->
+                            try
+                                ?CALL_SRV(SrvId, trace_log, [Level2, Txt, Args, Meta, Span])
+                            catch
+                                Class:Reason:Stack ->
+                                    lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
+                            end;
+                        false ->
+                            ok
+                    end;
                 undefined ->
                     % Logs without active span are printed with desired level
                     lager:log(Level, [], "Trace LOG "++Txt, Args)
@@ -315,12 +329,17 @@ error(Error) ->
 tags(Tags) ->
     case get_last_span() of
         {SrvId, Span} ->
-            try
-                ?CALL_SRV(SrvId, trace_tags, [Tags, Span]),
-                ok
-            catch
-                Class:Reason:Stack ->
-                    lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
+            case has_level(?LEVEL_TRACE, Span) of
+                true ->
+                    try
+                        ?CALL_SRV(SrvId, trace_tags, [Tags, Span]),
+                        ok
+                    catch
+                        Class:Reason:Stack ->
+                            lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
+                    end;
+                false ->
+                    ok
             end;
         undefined ->
             lager:debug("Trace TAGS: ~p", [Tags])
@@ -432,6 +451,15 @@ do_span_pop() ->
         _ ->
             undefined
     end.
+
+
+%% @private
+has_level(Level, #nkserver_span{levels=Levels}) ->
+    do_has_level(Levels, Level).
+
+do_has_level([], _Level) -> false;
+do_has_level([{_, L}|_], Level) when L >= Level -> true;
+do_has_level([_|Rest], Level) -> do_has_level(Rest, Level).
 
 
 %% @private

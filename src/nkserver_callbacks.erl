@@ -324,12 +324,12 @@ trace_error(Error, _Span) ->
 -spec trace_event(nkserver_trace:event_type(), list(), list(), map(), nkserver_trace:span()) ->
     any().
 
-trace_event(Type, Txt, Args, Meta, _Span) ->
+trace_event(Type, Txt, Args, Data, _Span) ->
     case Txt of
         [] ->
-            lager:debug("NkSERVER EVT ~s (~p)", [Type, Meta]);
+            lager:debug("NkSERVER EVT ~s (~p)", [Type, Data]);
         _ ->
-            lager:debug("NkSERVER EVT ~s "++Txt++ " (~p)", [Type|Args]++[Meta])
+            lager:debug("NkSERVER EVT ~s "++Txt++ " (~p)", [Type|Args]++[Data])
     end.
 
 
@@ -339,7 +339,7 @@ trace_event(Type, Txt, Args, Meta, _Span) ->
 -spec trace_trace(string(), list(), map(), nkserver_trace:span()) ->
     any().
 
-trace_trace(Txt, Args, _Meta, _Span) ->
+trace_trace(Txt, Args, _Data, _Span) ->
     lager:debug("NkSERVER TRACE "++Txt, Args).
 
 
@@ -349,7 +349,7 @@ trace_trace(Txt, Args, _Meta, _Span) ->
 -spec trace_log(nkserver_trace:level(), string(), list(), map(), nkserver_trace:span()) ->
     any().
 
-trace_log(Level, Txt, Args, _Meta, _Span) ->
+trace_log(Level, Txt, Args, _Data, _Span) ->
     lager:log(Level, [], "NkSERVER LOG "++Txt, Args).
 
 

@@ -34,6 +34,12 @@
 -define(LEVEL_ERROR, 7).
 -define(LEVEL_OFF, 9).
 
+-record(nkserver_span, {
+    id :: term(),
+    name :: binary(),
+    levels :: [{atom(), nkserver_trace:level_num()}],
+    meta = #{}
+}).
 
 -endif.
 
