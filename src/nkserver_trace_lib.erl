@@ -211,6 +211,10 @@ do_trace(Level, Type, Txt, Args, Data, #nkserver_span{id=SpanId}=Span) ->
             do_audit(Level, Type, Txt, Args, Data, Span);
         false ->
             lager:error("SKIPPED: ~p", [{Level, Type}]),
+            lager:error("LEVELS: ~p", [Span#nkserver_span.levels]),
+
+
+
             do_audit(Level, Type, Txt, Args, Data, Span)
     end;
 
