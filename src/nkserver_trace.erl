@@ -237,6 +237,7 @@ trace(Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
             case has_level(?LEVEL_TRACE, Span) of
                 true ->
                     try
+                        lager:error("NKLOG TRAC2"),
                         ?CALL_SRV(SrvId, trace_trace, [Txt, Args, Meta, Span])
                     catch
                         Class:Reason:Stack ->
