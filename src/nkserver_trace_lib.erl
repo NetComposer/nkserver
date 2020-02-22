@@ -81,7 +81,7 @@ new(SrvId, Span, Opts) ->
 
 %% @doc Called from callbacks
 finish(#nkserver_span{id=Id}=Span) ->
-    case trace_level(Span) > ?LEVEL_OFF of
+    case trace_level(Span) < ?LEVEL_OFF of
         true ->
             nkserver_ot:finish(Id);
         false ->
