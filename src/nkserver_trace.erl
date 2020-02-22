@@ -328,17 +328,12 @@ error(Error) ->
 tags(Tags) ->
     case get_last_span() of
         {SrvId, Span} ->
-            case has_level(?LEVEL_TRACE, Span) of
-                true ->
-                    try
-                        ?CALL_SRV(SrvId, trace_tags, [Tags, Span]),
-                        ok
-                    catch
-                        Class:Reason:Stack ->
-                            lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
-                    end;
-                false ->
-                    ok
+            try
+                ?CALL_SRV(SrvId, trace_tags, [Tags, Span]),
+                ok
+            catch
+                Class:Reason:Stack ->
+                    lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
             end;
         undefined ->
             lager:debug("Trace TAGS: ~p", [Tags])
