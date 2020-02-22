@@ -246,6 +246,9 @@ trace(Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
                             lager:warning("Exception calling nkserver_trace:trace() ~p ~p (~p)", [Class, Reason, Stack])
                     end;
                 false ->
+                    lager:error("NKLOG SKIPPIED ~p", [Span#nkserver_span.levels]),
+
+
                     ok
             end;
         undefined ->
@@ -462,7 +465,7 @@ has_level(Level, #nkserver_span{levels=Levels}) ->
     do_has_level(Levels, Level).
 
 do_has_level([], _Level) -> false;
-do_has_level([{_, L}|_], Level) when L >= Level -> true;
+do_has_level([{_, L}|_], Level) when Level >= L -> true;
 do_has_level([_|Rest], Level) -> do_has_level(Rest, Level).
 
 
