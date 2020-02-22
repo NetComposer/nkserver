@@ -232,23 +232,17 @@ trace(Txt, Meta) when is_list(Txt), is_map(Meta) ->
     any().
 
 trace(Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
-    lager:error("NKLOG TRAC21a: ~p", [Txt]),
     case get_last_span() of
         {SrvId, Span} ->
-            lager:error("NKLOG TRAC21b: ~p", [Txt]),
             case has_level(?LEVEL_TRACE, Span) of
                 true ->
                     try
-                        lager:error("NKLOG TRAC21c: ~p", [Txt]),
                         ?CALL_SRV(SrvId, trace_trace, [Txt, Args, Meta, Span])
                     catch
                         Class:Reason:Stack ->
                             lager:warning("Exception calling nkserver_trace:trace() ~p ~p (~p)", [Class, Reason, Stack])
                     end;
                 false ->
-                    lager:error("NKLOG SKIPPIED ~p", [Span#nkserver_span.levels]),
-
-
                     ok
             end;
         undefined ->
