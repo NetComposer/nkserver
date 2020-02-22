@@ -28,7 +28,9 @@
 
 %% @doc
 make_span(SpanId, Name, Levels, Meta) when is_list(Levels) ->
+    lager:error("NKLOG LEVELS ~p", [Levels]),
     Levels2 = [{Type, nkserver_trace:name_to_level(Level)} || {Type, Level} <- Levels],
+    lager:error("NKLOG LEVELS2 ~p", [Levels2]),
     #nkserver_span{
         id = SpanId,
         name = Name,
@@ -210,7 +212,7 @@ do_trace(Level, Type, Txt, Args, Data, #nkserver_span{id=SpanId}=Span) ->
             nkserver_ot:log(SpanId, lists:flatten(Txt2), Args2),
             do_audit(Level, Type, Txt, Args, Data, Span);
         false ->
-            lager:error("SKIPPED: ~p", [{Level, Type}]),
+            lager:error("SKIPPED: ~p", [{Level, Type, Txt, Args}]),
             lager:error("LEVELS: ~p", [Span#nkserver_span.levels]),
 
 
