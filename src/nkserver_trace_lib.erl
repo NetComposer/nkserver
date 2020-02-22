@@ -176,8 +176,8 @@ error(_Error, _Span) ->
 
 
 %% @private
-do_trace(Level, trace, "span started", [], Data, Span) ->
-    do_audit(Level, trace, "span started", [], Data, Span);
+do_trace(Level, info, "span started", [], Data, Span) ->
+    do_audit(Level, info, "span started", [], Data, Span);
 
 do_trace(Level, tags, Txt, Args, Data, Span) ->
     do_audit(Level, tags, Txt, Args, Data, Span);
@@ -210,6 +210,7 @@ do_trace(Level, Type, Txt, Args, Data, #nkserver_span{id=SpanId}=Span) ->
             nkserver_ot:log(SpanId, lists:flatten(Txt2), Args2),
             do_audit(Level, Type, Txt, Args, Data, Span);
         false ->
+            lager:error("SKIPPED: ~p", [{Level, Type}]),
             do_audit(Level, Type, Txt, Args, Data, Span)
     end;
 
