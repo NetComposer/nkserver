@@ -28,9 +28,7 @@
 
 %% @doc
 make_span(SpanId, Name, Levels, Meta) when is_list(Levels) ->
-    lager:error("NKLOG LEVELS ~p", [Levels]),
     Levels2 = [{Type, nkserver_trace:name_to_level(Level)} || {Type, Level} <- Levels],
-    lager:error("NKLOG LEVELS2 ~p", [Levels2]),
     #nkserver_span{
         id = SpanId,
         name = Name,
@@ -180,6 +178,9 @@ error(_Error, _Span) ->
 %% @private
 do_trace(Level, info, "span started", [], Data, Span) ->
     do_audit(Level, info, "span started", [], Data, Span);
+
+do_trace(Level, trace, "span finished", [], Data, Span) ->
+    do_audit(Level, trace, "span finished", [], Data, Span);
 
 do_trace(Level, tags, Txt, Args, Data, Span) ->
     do_audit(Level, tags, Txt, Args, Data, Span);
