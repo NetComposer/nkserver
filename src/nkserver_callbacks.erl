@@ -346,7 +346,7 @@ trace_trace(Txt, Args, _Data, _Span) ->
 %% @doc Called when nkserver_trace:log/2,3 is called
 %% It can do any processing
 
--spec trace_log(nkserver_trace:level(), string(), list(), map(), nkserver_trace:span()) ->
+-spec trace_log(nkserver_trace:level_name(), string(), list(), map(), nkserver_trace:span()) ->
     any().
 
 trace_log(Level, Txt, Args, _Data, _Span) ->

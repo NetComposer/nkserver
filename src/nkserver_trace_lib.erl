@@ -49,13 +49,17 @@ new(SrvId, Span, Opts) ->
                     undefined;
                 _ ->
                     case nkserver_trace:get_last_span() of
-                        {_, #nkserver_span{id=ParentName}} ->
-                            nkserver_ot:make_parent(ParentName);
+                        {_, #nkserver_span{id=ParentName}=ParentSpan} ->
+                            case trace_level(ParentSpan) < ?LEVEL_OFF of
+                                true ->
+                                    nkserver_ot:make_parent(ParentName);
+                                false ->
+                                    undefined
+                            end;
                         _ ->
                             undefined
                     end
             end,
-
             nkserver_ot:new(SpanId, SrvId, Name, TraceParent),
             App = maps:get(app, Meta, SrvId),
             nkserver_ot:update(SpanId, [{app, App}]),
@@ -75,7 +79,7 @@ new(SrvId, Span, Opts) ->
             Meta
     end,
     Span2 = Span#nkserver_span{meta = Meta2},
-    trace("span started", [], #{}, Span2),
+    log(info, "span started", [], #{}, Span2),
     {ok, Span2}.
 
 
@@ -84,7 +88,7 @@ finish(#nkserver_span{id=Id}=Span) ->
     case trace_level(Span) < ?LEVEL_OFF of
         true ->
             nkserver_ot:finish(Id);
-        false ->
+        _ ->
             ok
     end,
     trace("span finished", [], #{}, Span);
@@ -112,7 +116,7 @@ parent(#nkserver_span{id=Id}=Span) ->
         true ->
             nkserver_ot:make_parent(Id);
         false ->
-            ok
+            undefined
     end;
 
 parent(_Span) ->
@@ -172,16 +176,15 @@ error(_Error, _Span) ->
 
 
 %% @private
-do_trace(?LEVEL_EVENT, Type, [], [], Data, Span) when Type==span_started; Type==tags ->
-    do_audit(?LEVEL_EVENT, Type, [], [], Data, Span);
+do_trace(Level, trace, "span started", [], Data, Span) ->
+    do_audit(Level, trace, "span started", [], Data, Span);
+
+do_trace(Level, tags, Txt, Args, Data, Span) ->
+    do_audit(Level, tags, Txt, Args, Data, Span);
 
 do_trace(Level, Type, Txt, Args, Data, #nkserver_span{id=SpanId}=Span) ->
     case Level >= trace_level(Span) of
         true ->
-            Data2 = case Type of
-                tags -> #{};
-                _ -> Data
-            end,
             Txt2 = [
                 case Level of
                     ?LEVEL_TRACE -> [];
@@ -189,7 +192,7 @@ do_trace(Level, Type, Txt, Args, Data, #nkserver_span{id=SpanId}=Span) ->
                     _ -> "[~s] "
                 end,
                 Txt,
-                case map_size(Data2) of
+                case map_size(Data) of
                     0 -> [];
                     _ ->" (~p)"
                 end
@@ -200,11 +203,10 @@ do_trace(Level, Type, Txt, Args, Data, #nkserver_span{id=SpanId}=Span) ->
                     _ -> [Type]
                 end ++
                 Args ++
-                case map_size(Data2) of
+                case map_size(Data) of
                     0 -> [];
                     _ -> [Data]
                 end,
-            %lager:info("TRACE "++lists:flatten(Txt2), Args2),
             nkserver_ot:log(SpanId, lists:flatten(Txt2), Args2),
             do_audit(Level, Type, Txt, Args, Data, Span);
         false ->

@@ -95,7 +95,6 @@ new_span(SrvId, SpanId, Fun, Opts) ->
                 finish_span()
             end;
         {ok, SpanId2} ->
-
             nkserver_trace_lib:make_span(SpanId2, <<>>, [], #{});
         {error, Error} ->
             {error, {trace_creation_error, Error}}
@@ -286,7 +285,7 @@ log(Level, Txt, Args, Meta) when is_atom(Level), is_list(Txt), is_list(Args), is
                     case has_level(Level2, Span) of
                         true ->
                             try
-                                ?CALL_SRV(SrvId, trace_log, [Level2, Txt, Args, Meta, Span])
+                                ?CALL_SRV(SrvId, trace_log, [Level, Txt, Args, Meta, Span])
                             catch
                                 Class:Reason:Stack ->
                                     lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
