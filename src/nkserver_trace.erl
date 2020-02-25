@@ -94,8 +94,6 @@ new_span(SrvId, SpanId, Fun, Opts) ->
             after
                 finish_span()
             end;
-        {ok, SpanId2} ->
-            nkserver_trace_lib:make_span(SpanId2, <<>>, [], #{});
         {error, Error} ->
             {error, {trace_creation_error, Error}}
     end.

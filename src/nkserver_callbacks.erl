@@ -288,7 +288,8 @@ srv_master_become_leader(SrvId, State) ->
     {ok, nkserver_trace:span()}.
 
 trace_new_span(_SrvId, SpanId, _Opts) ->
-    {ok, SpanId}.
+    Span = nkserver_trace_lib:make_span(SpanId, <<>>, [], #{}),
+    {ok, Span}.
 
 
 %% @doc Called when nkserver_trace:finish/1 is called, to finishes a started trace.
