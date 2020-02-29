@@ -203,11 +203,8 @@ init(#{id:=SrvId, class:=Class}=Service) ->
             State1 = #state{
                 id = SrvId,
                 class = Class,
-                vsn =
-                service_status = #{
-                    status => starting,
-                    last_status_time => nklib_date:epoch(msecs)
-                },
+                vsn = Vsn,
+                status = #{status => starting, last_status_time => nklib_date:epoch(msecs)},
                 service = Service,
                 user = UserState
             },
@@ -347,13 +344,13 @@ init_srv(Service) ->
 
 %% @private
 set_workers_supervisor(State) ->
-    SupPid = wait_for_supervisor(10, State),
+    SupPid = wait_for_supervisor(100, State),
     monitor(process, SupPid),
     State#state{worker_sup_pid = SupPid}.
 
 
 %% @private
-wait_for_supervisor(Tries, #state{id=SrvId}=State) when Tries > 100 ->
+wait_for_supervisor(Tries, #state{id=SrvId}=State) when Tries > 1 ->
     case nkserver_workers_sup:get_pid(SrvId) of
         SupPid when is_pid(SupPid) ->
             SupPid;
@@ -603,7 +600,7 @@ do_update_status(NewStatus, #state{id=SrvId, vsn=Vsn, status=SrvStatus}=State) -
         stopped when NewStatus==stopping ->
             State;
         Status ->
-            case Status of
+            case NewStatus of
                 running ->
                     pg2:join({?MODULE, SrvId}, self()),
                     pg2:join({?MODULE, SrvId, Vsn}, self());
