@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2019 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2020 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -41,7 +41,6 @@
 
 
 -type continue() :: continue | {continue, list()}.
-%-type req() :: #nkreq{}.
 -type id() :: nkserver:id().
 -type user_state() :: map().
 -type service() :: nkserver:service().
@@ -53,9 +52,9 @@
 %% ===================================================================
 
 
-%% Called when the service starts, to update the start options.
--callback config(map()) -> map().
-
+%% Called when the service is being configured, to update spec
+%% See nkserver_config:get_spec/3
+-callback config(nkserver:spec()) -> nkserver:spec().
 
 -optional_callbacks([config/1]).
 
@@ -91,7 +90,7 @@ status(not_allowed)                 -> {"Not allowed", #{code=>409}};
 status(normal_termination) 		    -> "Normal termination";
 status(not_found)                   -> {"Not found", #{code=>404}};
 status(not_implemented) 		    -> "Not implemented";
-status(nkdomain)                    -> {"DNS Domain", #{code=>422}};
+status(nxdomain)                    -> {"DNS Domain", #{code=>422}};
 status(ok)                          -> "OK";
 status(operation_invalid) 	        -> "Invalid operation";
 status(operation_token_invalid) 	-> "Operation token is invalid";

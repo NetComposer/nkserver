@@ -1,7 +1,7 @@
 
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2019 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2020 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -19,8 +19,7 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc When option 'use_master' is used, this server is started at each node,
-%% managed by the server's process, one of them will become 'leader'
+%% @doc This server is started at each node, one of them will become 'leader'
 %%
 %% Each 5 seconds, we check that that the leader is set
 %% and callback srv_master_timer_check/1 is called
@@ -48,7 +47,6 @@
 %% Types
 %% ===================================================================
 
--type id() :: nkactor:id().
 
 
 %% ===================================================================
@@ -109,10 +107,10 @@ call_leader(_SrvId, _Msg, _Timeout, _Tries) ->
 
 
 %% @private
--spec start_link(id()) ->
+-spec start_link(nkserver:service()) ->
     {ok, pid()} | {error, term()}.
 
-start_link(SrvId) ->
+start_link(#{id:=SrvId}) ->
     gen_server:start_link(?MODULE, [SrvId], []).
 
 
@@ -295,7 +293,6 @@ global_name(SrvId) ->
 %% @private
 %% Will call the service's functions
 handle(Fun, Args, #state{id=SrvId, user_state=UserState}=State) ->
-    % lager:error("NKLOG CALLING  ~p ~p ~p ", [SrvId, Fun, Args++[SrvId, UserState]]),
     case ?CALL_SRV(SrvId, Fun, Args++[SrvId, UserState]) of
         {reply, Reply, UserState2} ->
             {reply, Reply, State#state{user_state=UserState2}};
@@ -343,8 +340,3 @@ strategy_min_nodes(SrvId) ->
                  [SrvId, Nodes, MinNodes]),
             no
     end.
-
-
-%%%% @private
-%%resolve({nkserver_leader, _SrvId}, Pid1, _Pid2) ->
-%%    Pid1.

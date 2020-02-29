@@ -5,16 +5,14 @@
 %% Defines
 %% ===================================================================
 
--define(SRV_DELAYED_DESTROY, 3000).
-
 
 %% ===================================================================
 %% Records
 %% ===================================================================
 
 
--define(SRV_LOG(Type, Txt, Args, Package),
-    lager:Type("NkSERVER srv '~s' (~s) "++Txt, [maps:get(id, Package), maps:get(class, Package) | Args])).
+-define(SRV_LOG(Type, Txt, Args, Service),
+    lager:Type("NkSERVER srv '~s' (~s) "++Txt, [maps:get(id, Service), maps:get(class, Service) | Args])).
 
 
 %% The callback module should have generated this function after parse transform

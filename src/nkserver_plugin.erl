@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2019 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2020 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -24,8 +24,6 @@
 -export([plugin_deps/0, plugin_meta/0, plugin_config/3, plugin_cache/3,
           plugin_start/3, plugin_update/4, plugin_stop/3]).
 -export_type([continue/0]).
-
--import(nklib_util, [to_list/1]).
 
 
 -type id() :: nkserver:id().
@@ -52,10 +50,8 @@
 %%      all plugins within a group are added a dependency on the previous defined plugins
 %%      in the same group. This way, the order of callbacks is the same as the order
 %%      plugins are defined in this group.
-%% - use_master:
-%%      boolean to set this plugin uses the plugin master
 -callback plugin_meta() ->
-    #{group=>term(), use_master=>boolean()} | undefined.
+    #{group=>term()} | undefined.
 
 
 %% @doc This function must parse any configuration for this plugin,
@@ -92,7 +88,6 @@
 %% This call is non-blocking, except for full service stop
 -callback plugin_stop(id(), config(), service()) ->
     ok | {error, term()}.
-
 
 
 %% @doc Called during service's update, for plugins with updated configuration

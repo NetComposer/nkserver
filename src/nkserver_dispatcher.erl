@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2019 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2020 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -161,7 +161,7 @@ make_module(#{id:=Id}=Service) ->
     ?SRV_LOG(debug, "starting dispatcher recompilation...", [], Service),
     ServiceKeys = [
         id, class, uuid, hash, timestamp, plugins, expanded_plugins,
-        config, use_master, master_min_nodes, config_cache
+        config, master_min_nodes, config_cache
     ],
     {ServiceExported, ServiceFuns} = make_service_funs(ServiceKeys, Service),
     PluginList = maps:get(expanded_plugins, Service),

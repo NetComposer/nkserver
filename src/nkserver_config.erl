@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2019 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2020 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -31,11 +31,14 @@
 
 
 %% @doc
-config(SrvId, PkgClass, Opts, OldService) ->
+-spec config(nkserver:id(), nkserver:class(), nkserver:spec(), nkserver:service()) ->
+    {ok, nkserver:service()} | {error, term()}.
+
+config(SrvId, PkgClass, Spec, OldService) ->
     try
-        case get_spec(SrvId, PkgClass, Opts) of
-            {ok, Spec} ->
-                do_config(Spec, OldService);
+        case get_spec(SrvId, PkgClass, Spec) of
+            {ok, Spec2} ->
+                do_config(Spec2, OldService);
             {error, Error} ->
                 {error, Error}
         end
@@ -45,39 +48,37 @@ config(SrvId, PkgClass, Opts, OldService) ->
     end.
 
 
-
+%% @private
 -spec get_spec(nkserver:id(), nkserver:class(), nkserver:spec()) ->
     {ok, nkserver:service()} | {error, term()}.
 
-get_spec(SrvId, PkgClass, Opts) ->
+get_spec(SrvId, PkgClass, Spec) ->
     code:ensure_loaded(SrvId),
-    Opts2 = case erlang:function_exported(SrvId, config, 1) of
+    Spec2 = case erlang:function_exported(SrvId, config, 1) of
         true ->
-            SrvId:config(Opts);
+            SrvId:config(Spec);
         false ->
-            Opts
+            Spec
     end,
     Syntax = #{
         uuid => binary,
+        vsn => binary,
         plugins => {list, atom},
         use_module => module,
-        use_master => boolean,
         master_min_nodes => {integer, 0, none},
         '__allow_unknown' => true
     },
-    case nklib_syntax:parse(Opts2, Syntax) of
-        {ok, Opts3, _} ->
-            CoreOpts = [
-                uuid, plugins, use_module, use_master, master_min_nodes
-            ],
-            Opts4 = maps:with(CoreOpts, Opts3),
-            Config = maps:without(CoreOpts, Opts3),
-            Spec = Opts4#{
+    case nklib_syntax:parse(Spec2, Syntax) of
+        {ok, Spec3, _} ->
+            CoreSpec = [uuid, plugins, vsn, use_module, master_min_nodes],
+            Spec4 = maps:with(CoreSpec, Spec3),
+            Config = maps:without(CoreSpec, Spec3),
+            Spec5 = Spec4#{
                 id => SrvId,
                 class => PkgClass,
                 config => Config
             },
-            {ok, Spec};
+            {ok, Spec5};
         {error, Error} ->
             {error, Error}
     end.
@@ -109,24 +110,11 @@ do_config(#{id:=Id, class:=Class}=Spec, OldService) ->
         _ ->
             throw({error, class_cannot_be_updated})
     end,
-    UseMaster = case {Spec, OldService} of
-        {#{use_master:=UseMaster0}, #{use_master:=UseMaster0}} ->
-            UseMaster0;
-        {#{use_master:=_}, #{use_master:=_}} ->
-            throw({error, use_master_cannot_be_updated});
-        {#{use_master:=UseMaster0}, _} ->
-            UseMaster0;
-        {_, #{use_master:=UseMaster0}} ->
-            UseMaster0;
-        {_, _} ->
-            false
-    end,
     MinNodes = maps:get(master_min_nodes, Spec, maps:get(master_min_nodes, OldService, 0)),
     Plugins = maps:get(plugins, Spec, maps:get(plugins, OldService, [])),
     Service1 = Spec#{
         uuid => UUID,
         plugins => Plugins,
-        use_master => UseMaster,
         master_min_nodes => MinNodes,
         timestamp => nklib_date:epoch(msecs)
     },
@@ -141,15 +129,8 @@ config_plugins(Service) ->
     % Plugins2 is the expanded list of plugins, first bottom, last top (Id)
     Plugins2 = expand_plugins(Id, [Class|Plugins]),
     ?SRV_LOG(debug, "starting configuration", [], Service),
-    Meta = get_meta(Class),
-    Service2 = case Meta of
-        #{use_master:=true} ->
-            Service#{use_master := true};
-        _ ->
-            Service
-    end,
     % High to low
-    Service3 = config_plugins(lists:reverse(Plugins2), Service2),
+    Service3 = config_plugins(lists:reverse(Plugins2), Service),
     Hash = erlang:phash2(maps:without([hash, uuid], Service3)),
     Service3#{
         expanded_plugins => Plugins2,
@@ -435,17 +416,4 @@ save_uuid(Path, UUID, Spec) ->
             lager:warning("NkSERVER: Could not write file ~s: ~p", [Path, Error]),
             UUID
     end.
-
-
-
-
-
-
-
-
-%%%% @private
-%%to_bin(Term) when is_binary(Term) -> Term;
-%%to_bin(Term) -> nklib_util:to_binary(Term).
-
-
 

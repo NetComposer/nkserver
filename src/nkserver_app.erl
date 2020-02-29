@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2019 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2020 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -24,7 +24,6 @@
 -behaviour(application).
 
 -export([start/0, start/1, start/2, stop/1]).
--export([set_nodes/1]).
 -export([get/1, get/2, put/2, del/1]).
 
 -include("nkserver.hrl").
@@ -62,7 +61,6 @@ start(_Type, _Args) ->
     Syntax = #{
         log_path => binary,
         save_dispatcher_source => boolean,
-        nodes => {list, binary},
         '__defaults' => #{
             log_path => <<"log">>,
             save_dispatcher_source => true
@@ -73,25 +71,12 @@ start(_Type, _Args) ->
             file:make_dir(get(log_path)),
             {ok, Pid} = nkserver_sup:start_link(),
             {ok, Vsn} = application:get_key(nkserver, vsn),
-            % register_packages(),
-            %CallbacksHttpUrl = get(callbacksHttpUrl),
-            %put(callbacksHttpUrl, nklib_url:norm(CallbacksHttpUrl)),
             lager:info("NkSERVER v~s has started.", [Vsn]),
-            % Dummy package for tests
-            nkserver_util:register_package_class(<<"Service">>, nkserver),
-            ?MODULE:put(nkserver_start_time, nklib_util:l_timestamp()),
             {ok, Pid};
         {error, Error} ->
             lager:error("Error parsing config: ~p", [Error]),
             error(Error)
     end.
-
-
-
-%% @doc
-set_nodes(Nodes) when is_list(Nodes) ->
-    ?MODULE:put(nodes, [nklib_util:to_binary(Node) || Node <- Nodes]).
-
 
 
 %% @private OTP standard stop callback

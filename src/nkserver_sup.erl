@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2019 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2020 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -19,33 +19,21 @@
 %% -------------------------------------------------------------------
 
 %% @doc Main supervisor
-%% This main supervisor, starts a single supervisor registered as
-%% 'nkserver_all_srvs_sup'
-%% Each started service will start a supervisor under it (see nkserver_srv_sup)
-
 -module(nkserver_sup).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(supervisor).
 
--export([init/1, start_link/0, start_services_sup/0]).
+-export([init/1, start_link/0]).
 
 -include("nkserver.hrl").
 
 %% @private
 start_link() ->
     ChildsSpec = [
-%%        #{
-%%            id => nkserver_node,
-%%            start => {nkserver_node, start_link, []}
-%%        }
     ],
     supervisor:start_link({local, ?MODULE}, ?MODULE, 
                             {{one_for_one, 10, 60}, ChildsSpec}).
 
-%% @private
-start_services_sup() ->
-    supervisor:start_link({local, nkserver_all_srvs_sup},
-                            ?MODULE, {{one_for_one, 10, 60}, []}).
 
 
 %% @private

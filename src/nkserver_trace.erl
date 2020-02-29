@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2019 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2020 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -23,6 +23,7 @@
 -module(nkserver_trace).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([new_span/2, new_span/3, new_span/4, finish_span/0, update_span/1, span_parent/0]).
+-export([make_span/4]).
 -export([error/1, tags/1, get_last_span/0]).
 -export([trace/1, trace/2, trace/3]).
 -export([event/1, event/2, event/3, event/4, log/2, log/3, log/4, clean/1]).
@@ -97,6 +98,17 @@ new_span(SrvId, SpanId, Fun, Opts) ->
         {error, Error} ->
             {error, {trace_creation_error, Error}}
     end.
+
+
+%% @doc
+make_span(SpanId, Name, Levels, Meta) when is_list(Levels) ->
+    Levels2 = [{Type, nkserver_trace:name_to_level(Level)} || {Type, Level} <- Levels],
+    #nkserver_span{
+        id = SpanId,
+        name = Name,
+        levels = Levels2,
+        meta = Meta
+    }.
 
 
 %% @doc Finishes a started trace. You don't need to call it directly,

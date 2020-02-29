@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2019 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2020 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -21,21 +21,9 @@
 %% @doc
 -module(nkserver_trace_lib).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([make_span/4]).
 -export([new/3, finish/1, update/2, parent/1]).
 -export([log/5, event/5, trace/4, tags/2, error/2]).
 -include("nkserver_trace.hrl").
-
-%% @doc
-make_span(SpanId, Name, Levels, Meta) when is_list(Levels) ->
-    Levels2 = [{Type, nkserver_trace:name_to_level(Level)} || {Type, Level} <- Levels],
-    #nkserver_span{
-        id = SpanId,
-        name = Name,
-        levels = Levels2,
-        meta = Meta
-    }.
-
 
 %% @doc
 new(SrvId, Span, Opts) ->

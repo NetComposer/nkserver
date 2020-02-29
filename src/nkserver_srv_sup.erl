@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2019 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2020 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -26,14 +26,18 @@
 -export([start_link/3, stop/1, init/1, get_pid/1, get_all/0]).
 
 
-%% @doc
+%% @doc Starts a new service
+%% A supervisor is started (registered as {?MODULE, SrvId} with two childs
+%% - A worker, registered with the id of the service
+%% - Another worker, that tries to register globally in the cluster
+%% - A supervisor to start service's childs under
 -spec start_link(nkserver:class(), nkserver:id(), nkserver:spec()) ->
     {ok, pid()} | {error, term()}.
 
-start_link(PkgClass, SrvId, Opts) ->
+start_link(PkgClass, SrvId, Spec) ->
     case get_pid(SrvId) of
         undefined ->
-            case nkserver_config:config(SrvId, PkgClass, Opts, #{}) of
+            case nkserver_config:config(SrvId, PkgClass, Spec, #{}) of
                 {ok, Service} ->
                     ChildSpec = {{one_for_one, 10, 60}, get_childs(Service)},
                     supervisor:start_link(?MODULE, {SrvId, ChildSpec});
@@ -70,13 +74,18 @@ get_childs(Service) ->
             start => {nkserver_srv, start_link, [Service]},
             restart => permanent,
             shutdown => 15000
+        },
+        #{
+            id => master,
+            type => worker,
+            start => {nkserver_master, start_link, [Service]},
+            restart => permanent,
+            shutdown => 15000
         }
     ].
 
 
-
 %% @private
-%% Shared for main supervisor and service supervisor
 init({Id, ChildsSpec}) ->
     ets:new(Id, [named_table, public]),
     yes = nklib_proc:register_name({?MODULE, Id}, self()),
@@ -84,12 +93,13 @@ init({Id, ChildsSpec}) ->
     {ok, ChildsSpec}.
 
 
-%% @private Get pid() of master supervisor for all services
+%% @doc Get pid() of master supervisor for a service
 get_pid(Pid) when is_pid(Pid) ->
     Pid;
 get_pid(SrvId) ->
     nklib_proc:whereis_name({?MODULE, SrvId}).
 
 
+%% @doc Get all services supervisors
 get_all() ->
     nklib_proc:values(?MODULE).
