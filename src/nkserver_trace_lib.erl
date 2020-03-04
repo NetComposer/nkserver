@@ -37,7 +37,7 @@ new(Span, Opts) ->
                     undefined;
                 _ ->
                     case nkserver_trace:get_last_span() of
-                        {_, #nkserver_span{id=ParentName}=ParentSpan} ->
+                        #nkserver_span{id=ParentName}=ParentSpan ->
                             case trace_level(ParentSpan) < ?LEVEL_OFF of
                                 true ->
                                     nkserver_ot:make_parent(ParentName);
