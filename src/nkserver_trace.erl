@@ -22,6 +22,7 @@
 %% @doc Basic tracing support
 -module(nkserver_trace).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
+-export([make_span/5]).
 -export([new_span/2, new_span/3, new_span/4, finish_span/0, update_span/1, span_parent/0]).
 -export([error/1, tags/1, get_last_span/0]).
 -export([trace/1, trace/2, trace/3]).
@@ -43,6 +44,18 @@
 
 -type parent() :: term().
 -type new_opts() :: map().
+
+%% @doc
+make_span(SrvId, SpanId, Name, Levels, Meta) when is_list(Levels) ->
+    Levels2 = [{Type, nkserver_trace:name_to_level(Level)} || {Type, Level} <- Levels],
+    #nkserver_span{
+        srv = SrvId,
+        id = SpanId,
+        name = Name,
+        levels = Levels2,
+        meta = Meta
+    }.
+
 
 %% @doc Starts a new span
 -spec new_span(nkserver:id()|last, term()) ->
@@ -70,7 +83,7 @@ new_span(SrvId, SpanId, Fun) ->
 
 new_span(last, SpanId, Fun, Opts) ->
     case get_last_span() of
-        {SrvId, _} when SrvId /= last ->
+        #nkserver_span{srv=SrvId} when SrvId /= last ->
             new_span(SrvId, SpanId, Fun, Opts);
         _ when Fun == infinity ->
             ok;
@@ -81,15 +94,15 @@ new_span(last, SpanId, Fun, Opts) ->
 new_span(SrvId, SpanId, Fun, Opts) ->
     case ?CALL_SRV(SrvId, trace_new_span, [SrvId, SpanId, Opts]) of
         {ok, #nkserver_span{}=Span} when Fun == infinity ->
-            do_span_push(SrvId, Span),
+            do_span_push(Span),
             ok;
-        {ok, #nkserver_span{}=Span} ->
-            do_span_push(SrvId, Span),
+        {ok, #nkserver_span{name=Name}=Span} ->
+            do_span_push(Span),
             try
                 Fun()
             catch
                 Class:Reason:Stack ->
-                    log(warning, "Trace exception '~s' (~p) (~p)", [Class, Reason, Stack]),
+                    log(warning, "Span ~s Trace exception '~s' (~p) (~p)", [Name, Class, Reason, Stack]),
                     erlang:raise(Class, Reason, Stack)
             after
                 finish_span()
@@ -105,7 +118,7 @@ new_span(SrvId, SpanId, Fun, Opts) ->
     any().
 
 finish_span() ->
-    {SrvId, Span} = do_span_pop(),
+    #nkserver_span{srv=SrvId} = Span = do_span_pop(),
     ?CALL_SRV(SrvId, trace_finish_span, [Span]),
     ok.
 
@@ -116,7 +129,7 @@ finish_span() ->
 
 update_span(Operations) ->
     case get_last_span() of
-        {SrvId, Span} ->
+        #nkserver_span{srv=SrvId}=Span ->
             try
                 ?CALL_SRV(SrvId, trace_update_span, [Operations, Span])
             catch
@@ -135,7 +148,7 @@ update_span(Operations) ->
 
 span_parent() ->
     case get_last_span() of
-        {SrvId, Span} ->
+        #nkserver_span{srv=SrvId}=Span ->
             try
                 ?CALL_SRV(SrvId, trace_span_parent, [Span])
             catch
@@ -186,7 +199,7 @@ event(Type, Txt, Meta) when is_map(Meta), is_list(Txt) ->
 
 event(Type, Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
     case get_last_span() of
-        {SrvId, Span} ->
+        #nkserver_span{srv=SrvId}=Span ->
             case has_level(?LEVEL_EVENT, Span) of
                 true ->
                     try
@@ -231,7 +244,7 @@ trace(Txt, Meta) when is_list(Txt), is_map(Meta) ->
 
 trace(Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
     case get_last_span() of
-        {SrvId, Span} ->
+        #nkserver_span{srv=SrvId}=Span ->
             case has_level(?LEVEL_TRACE, Span) of
                 true ->
                     try
@@ -278,7 +291,7 @@ log(Level, Txt, Args, Meta) when is_atom(Level), is_list(Txt), is_list(Args), is
     case lists:member(Level, [debug, info, notice, warning, error]) of
         true ->
             case get_last_span() of
-                {SrvId, Span} ->
+                #nkserver_span{srv=SrvId}=Span ->
                     Level2 = name_to_level(Level),
                     case has_level(Level2, Span) of
                         true ->
@@ -306,7 +319,7 @@ log(Level, Txt, Args, Meta) when is_atom(Level), is_list(Txt), is_list(Args), is
 
 error(Error) ->
     case get_last_span() of
-        {SrvId, Span} ->
+        #nkserver_span{srv=SrvId}=Span ->
             try
                 ?CALL_SRV(SrvId, trace_error, [Error, Span]),
                 ok
@@ -325,7 +338,7 @@ error(Error) ->
 
 tags(Tags) ->
     case get_last_span() of
-        {SrvId, Span} ->
+        #nkserver_span{srv=SrvId}=Span ->
             try
                 ?CALL_SRV(SrvId, trace_tags, [Tags, Span]),
                 ok
@@ -344,7 +357,7 @@ tags(Tags) ->
 
 clean(Msg) ->
     case get_last_span() of
-        {SrvId, Span} ->
+        #nkserver_span{srv=SrvId}=Span ->
             try
                 ?CALL_SRV(SrvId, trace_clean, [Msg, Span])
             catch
@@ -421,27 +434,27 @@ get_last_span() ->
     case erlang:get(nkserver_spans) of
         undefined -> undefined;
         [] -> undefined;
-        [{SrvId, Span}|_] -> {SrvId, Span}
+        [Span|_] -> Span
     end.
 
 
 %% @doc Pushes a spain information to the process dictionary
 %% nkserver is not going to use it by default, use it in your
 %% trace_event and trace_log callbacks
-do_span_push(SrvId, Span) ->
+do_span_push(Span) ->
     Spans = case erlang:get(nkserver_spans) of
         undefined -> [];
         Spans0 -> Spans0
     end,
-    erlang:put(nkserver_spans, [{SrvId, Span}|Spans]).
+    erlang:put(nkserver_spans, [Span|Spans]).
 
 
 %% @doc
 do_span_pop() ->
     case erlang:get(nkserver_spans) of
-        [{SrvId, Span}|Spans] ->
+        [Span|Spans] ->
             erlang:put(nkserver_spans, Spans),
-            {SrvId, Span};
+            Span;
         _ ->
             undefined
     end.

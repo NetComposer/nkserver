@@ -287,8 +287,8 @@ srv_master_become_leader(SrvId, State) ->
 -spec trace_new_span(nkserver:id(), term(), nkserver_trace:run_opts()) ->
     {ok, nkserver_trace:span()}.
 
-trace_new_span(_SrvId, SpanId, _Opts) ->
-    Span = nkserver_trace_lib:make_span(SpanId, <<>>, [], #{}),
+trace_new_span(SrvId, SpanId, _Opts) ->
+    Span = nkserver_trace:make_span(SrvId, SpanId, <<>>, [], #{}),
     {ok, Span}.
 
 

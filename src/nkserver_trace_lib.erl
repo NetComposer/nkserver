@@ -21,25 +21,13 @@
 %% @doc
 -module(nkserver_trace_lib).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([make_span/4]).
--export([new/3, finish/1, update/2, parent/1]).
+-export([new/2, finish/1, update/2, parent/1]).
 -export([log/5, event/5, trace/4, tags/2, error/2]).
 -include("nkserver_trace.hrl").
 
-%% @doc
-make_span(SpanId, Name, Levels, Meta) when is_list(Levels) ->
-    Levels2 = [{Type, nkserver_trace:name_to_level(Level)} || {Type, Level} <- Levels],
-    #nkserver_span{
-        id = SpanId,
-        name = Name,
-        levels = Levels2,
-        meta = Meta
-    }.
 
-
-%% @doc
-new(SrvId, Span, Opts) ->
-    #nkserver_span{id=SpanId, name=Name, meta=Meta} = Span,
+new(Span, Opts) ->
+    #nkserver_span{srv=SrvId, id=SpanId, name=Name, meta=Meta} = Span,
     Meta2 = case trace_level(Span) < ?LEVEL_OFF of
         true ->
             TraceParent = case Opts of
@@ -221,7 +209,7 @@ do_trace(Level, Type, Txt, Args, Data, Span) ->
 
 
 %% @private
-do_audit(Level, Type, Txt, Args, Data, #nkserver_span{meta=Meta}=Span) ->
+do_audit(Level, Type, Txt, Args, Data, #nkserver_span{name=Name, meta=Meta}=Span) ->
     case Level >= audit_level(Span) of
         true ->
             Reason = case Txt of
@@ -236,6 +224,7 @@ do_audit(Level, Type, Txt, Args, Data, #nkserver_span{meta=Meta}=Span) ->
             AuditMsg = BaseMeta#{
                 level => Level,
                 type => Type,
+                span => Name,
                 reason => Reason,
                 data => Data,
                 metadata => ExtraMeta
