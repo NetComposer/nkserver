@@ -209,31 +209,36 @@ do_trace(Level, Type, Txt, Args, Data, Span) ->
 
 
 %% @private
-do_audit(Level, Type, Txt, Args, Data, #nkserver_span{name=Name, meta=Meta}=Span) ->
+do_audit(Level, Type, Txt, Args, Data, #nkserver_span{name=Name, meta=Meta, opts=Opts}=Span) ->
     case Level >= audit_level(Span) of
         true ->
-            Reason = case Txt of
-                undefined ->
-                    <<>>;
+            case Opts of
+                #{audit_srv:=AuditSrv} ->
+                    Reason = case Txt of
+                        undefined ->
+                            <<>>;
+                        _ ->
+                            list_to_binary(io_lib:format(Txt, Args))
+                    end,
+                    Core = [app, group, resource, target, namespace],
+                    BaseMeta = maps:with(Core, Meta),
+                    ExtraMeta = maps:without(Core, Meta),
+                    AuditMsg = BaseMeta#{
+                        level => Level,
+                        type => Type,
+                        span => Name,
+                        reason => Reason,
+                        data => Data,
+                        metadata => ExtraMeta
+                    },
+                    ok = nkserver_audit_sender:store(AuditSrv, AuditMsg);
                 _ ->
-                    list_to_binary(io_lib:format(Txt, Args))
-            end,
-            Core = [app, group, resource, target, namespace],
-            BaseMeta = maps:with(Core, Meta),
-            ExtraMeta = maps:without(Core, Meta),
-            AuditMsg = BaseMeta#{
-                level => Level,
-                type => Type,
-                span => Name,
-                reason => Reason,
-                data => Data,
-                metadata => ExtraMeta
-            },
-            ok = netcomp_rcp_util:send_audit_trace(AuditMsg),
-            do_lager(Level, Type, Txt, Args, Data, Span);
+                    ok
+            end;
         false ->
-            do_lager(Level, Type, Txt, Args, Data, Span)
-    end;
+            ok
+    end,
+    do_lager(Level, Type, Txt, Args, Data, Span);
 
 do_audit(Level, Type, Txt, Args, Data, Span) ->
     do_lager(Level, Type, Txt, Args, Data, Span).

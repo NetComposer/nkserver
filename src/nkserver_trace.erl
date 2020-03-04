@@ -22,7 +22,7 @@
 %% @doc Basic tracing support
 -module(nkserver_trace).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([make_span/5]).
+-export([make_span/6]).
 -export([new_span/2, new_span/3, new_span/4, finish_span/0, update_span/1, span_parent/0]).
 -export([error/1, tags/1, get_last_span/0]).
 -export([trace/1, trace/2, trace/3]).
@@ -46,14 +46,15 @@
 -type new_opts() :: map().
 
 %% @doc
-make_span(SrvId, SpanId, Name, Levels, Meta) when is_list(Levels) ->
+make_span(SrvId, SpanId, Name, Levels, Meta, Opts) when is_list(Levels) ->
     Levels2 = [{Type, nkserver_trace:name_to_level(Level)} || {Type, Level} <- Levels],
     #nkserver_span{
         srv = SrvId,
         id = SpanId,
         name = Name,
         levels = Levels2,
-        meta = Meta
+        meta = Meta,
+        opts = Opts
     }.
 
 

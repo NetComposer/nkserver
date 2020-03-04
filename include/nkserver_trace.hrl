@@ -39,7 +39,8 @@
     id :: term(),
     name = <<>> :: binary(),
     levels = [] :: [{atom(), nkserver_trace:level_num()}],
-    meta = #{}
+    meta = #{} :: map(),
+    opts = #{} :: map
 }).
 
 -endif.

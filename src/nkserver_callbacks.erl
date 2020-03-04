@@ -288,7 +288,7 @@ srv_master_become_leader(SrvId, State) ->
     {ok, nkserver_trace:span()}.
 
 trace_new_span(SrvId, SpanId, _Opts) ->
-    Span = nkserver_trace:make_span(SrvId, SpanId, <<>>, [], #{}),
+    Span = nkserver_trace:make_span(SrvId, SpanId, <<>>, [], #{}, #{}),
     {ok, Span}.
 
 
