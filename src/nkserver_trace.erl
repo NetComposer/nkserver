@@ -213,7 +213,7 @@ event(Type, Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
             end;
         undefined ->
             % Event without active span are printed as debug
-            lager:debug("Trace EVENT ~s (~p)", [Type, Meta])
+            lager:debug("Trace EVENT ~s "++Txt++" (~p)", [Type|Args]++[Meta])
     end.
 
 

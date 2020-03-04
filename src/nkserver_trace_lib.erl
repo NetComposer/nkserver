@@ -67,19 +67,19 @@ new(Span, Opts) ->
             Meta
     end,
     Span2 = Span#nkserver_span{meta = Meta2},
-    log(info, "span started: ~s", [Name], #{}, Span2),
+    log(debug, "span started", [], #{}, Span2),
     {ok, Span2}.
 
 
 %% @doc Called from callbacks
-finish(#nkserver_span{id=Id, name=Name}=Span) ->
+finish(#nkserver_span{id=Id}=Span) ->
     case trace_level(Span) < ?LEVEL_OFF of
         true ->
             nkserver_ot:finish(Id);
         _ ->
             ok
     end,
-    trace("span finished: ~s", [Name], #{}, Span);
+    log(debug, "span finished", [], #{}, Span);
 
 finish(_Span) ->
     continue.
@@ -164,11 +164,11 @@ error(_Error, _Span) ->
 
 
 %% @private
-do_trace(Level, info, "span started", [], Data, Span) ->
-    do_audit(Level, info, "span started", [], Data, Span);
+do_trace(Level, debug, "span started", [], Data, Span) ->
+    do_audit(Level, debug, "span started", [], Data, Span);
 
-do_trace(Level, trace, "span finished", [], Data, Span) ->
-    do_audit(Level, trace, "span finished", [], Data, Span);
+do_trace(Level, debug, "span finished", [], Data, Span) ->
+    do_audit(Level, debug, "span finished", [], Data, Span);
 
 do_trace(Level, tags, Txt, Args, Data, Span) ->
     do_audit(Level, tags, Txt, Args, Data, Span);
@@ -216,7 +216,15 @@ do_audit(Level, Type, Txt, Args, Data, #nkserver_span{name=Name, meta=Meta}=Span
                 undefined ->
                     <<>>;
                 _ ->
-                    to_bin(io_lib:format(Txt, Args))
+%%                    case Txt of
+%%                        "~s" ->
+%%                            lager:error("NKLOG ERROR1 ~p", [Args]),
+%%                            R = to_bin(io_lib:format(Txt, Args)),
+%%                            lager:error("NKLOG ERROR2 ~p", [R]);
+%%                        _ ->
+%%                            ok
+%%                    end,
+                    list_to_binary(io_lib:format(Txt, Args))
             end,
             Core = [app, group, resource, target, namespace],
             BaseMeta = maps:with(Core, Meta),
@@ -299,20 +307,3 @@ log_level(#nkserver_span{levels=Levels}) ->
 %% @private
 audit_level(#nkserver_span{levels=Levels}) ->
     nklib_util:get_value(trace, Levels, off).
-
-
-%%%% @private
-%%json(Data) ->
-%%     case catch nklib_json:encode(Data) of
-%%        {'EXIT', _} ->
-%%            lager:error("Error encoding JSON: ~p", [Data]),
-%%            <<"{}">>;
-%%        Json ->
-%%            Json
-%%    end.
-
-
-%% @private
-to_bin(Term) when is_binary(Term) -> Term;
-to_bin(Term) -> nklib_util:to_binary(Term).
-
