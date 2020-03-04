@@ -216,14 +216,6 @@ do_audit(Level, Type, Txt, Args, Data, #nkserver_span{name=Name, meta=Meta}=Span
                 undefined ->
                     <<>>;
                 _ ->
-%%                    case Txt of
-%%                        "~s" ->
-%%                            lager:error("NKLOG ERROR1 ~p", [Args]),
-%%                            R = to_bin(io_lib:format(Txt, Args)),
-%%                            lager:error("NKLOG ERROR2 ~p", [R]);
-%%                        _ ->
-%%                            ok
-%%                    end,
                     list_to_binary(io_lib:format(Txt, Args))
             end,
             Core = [app, group, resource, target, namespace],
