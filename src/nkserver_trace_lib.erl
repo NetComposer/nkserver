@@ -79,19 +79,19 @@ new(SrvId, Span, Opts) ->
             Meta
     end,
     Span2 = Span#nkserver_span{meta = Meta2},
-    log(info, "span started", [], #{}, Span2),
+    log(info, "span started: ~s", [Name], #{}, Span2),
     {ok, Span2}.
 
 
 %% @doc Called from callbacks
-finish(#nkserver_span{id=Id}=Span) ->
+finish(#nkserver_span{id=Id, name=Name}=Span) ->
     case trace_level(Span) < ?LEVEL_OFF of
         true ->
             nkserver_ot:finish(Id);
         _ ->
             ok
     end,
-    trace("span finished", [], #{}, Span);
+    trace("span finished: ~s", [Name], #{}, Span);
 
 finish(_Span) ->
     continue.
