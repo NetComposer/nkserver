@@ -51,12 +51,13 @@ new(Span, Opts) ->
             nkserver_ot:new(SpanId, SrvId, Name, TraceParent),
             App = maps:get(app, Meta, SrvId),
             nkserver_ot:update(SpanId, [{app, App}]),
-            Tags = nkserver_trace:flatten_tags(Meta),
+            Tags1 = nkserver_trace:flatten_tags(Meta),
+            Tags2 = Tags1#{time => nklib_date:now_3339(usecs)},
             TraceHex = nkserver_ot:trace_id_hex(SpanId),
             % Connect to http://127.0.0.1:16686/trace/TraceHex
             SpanHex = nkserver_ot:span_id_hex(SpanId),
             % http://127.0.0.1:16686/trace/TraceHexuiFind=SpanHex
-            nkserver_ot:tags(SpanId, Tags),
+            nkserver_ot:tags(SpanId, Tags2),
             Meta#{
                 trace_id => TraceHex,
                 span_id => SpanHex,
