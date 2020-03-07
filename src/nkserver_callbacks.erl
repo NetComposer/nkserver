@@ -318,7 +318,7 @@ trace_finish_span(_Span) ->
     any().
 
 trace_error(Error, _Span) ->
-    lager:info("NkSERVER Span ERROR: ~s", [Error]).
+    lager:info("ERROR: ~p", [Error]).
 
 
 %% @doc Called when nkserver_trace:event/2,3 is called
@@ -328,9 +328,9 @@ trace_error(Error, _Span) ->
 trace_event(Type, Txt, Args, Data, _Span) ->
     case Txt of
         [] ->
-            lager:debug("NkSERVER EVT ~s (~p)", [Type, Data]);
+            lager:debug("EVENT ~s (~p)", [Type, Data]);
         _ ->
-            lager:debug("NkSERVER EVT ~s "++Txt++ " (~p)", [Type|Args]++[Data])
+            lager:debug("EVENT ~s "++Txt++ " (~p)", [Type|Args]++[Data])
     end.
 
 
@@ -341,7 +341,7 @@ trace_event(Type, Txt, Args, Data, _Span) ->
     any().
 
 trace_trace(Txt, Args, _Data, _Span) ->
-    lager:debug("NkSERVER TRACE "++Txt, Args).
+    lager:debug("TRACE "++Txt, Args).
 
 
 %% @doc Called when nkserver_trace:log/2,3 is called
@@ -351,14 +351,15 @@ trace_trace(Txt, Args, _Data, _Span) ->
     any().
 
 trace_log(Level, Txt, Args, _Data, _Span) ->
-    lager:log(Level, [], "NkSERVER LOG "++Txt, Args).
+    lager:log(Level, [], "LOG "++Txt, Args).
 
 
 %% @doc Adds a number of tags to a trace
 -spec trace_tags(map(), nkserver_trace:span()) -> any().
 
-trace_tags(_Tags, _Span) ->
-    ok.
+trace_tags(Tags, _Span) ->
+    lager:debug("TAGS: ~p", [Tags]).
+
 
 %% @doc Cleans a message before tracing (to remove passwords, etc.)
 -spec trace_clean(any(), nkserver_trace:span()) ->

@@ -213,8 +213,7 @@ event(Type, Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
                     ok
             end;
         undefined ->
-            % Event without active span are printed as debug
-            lager:debug("Trace EVENT ~s "++Txt++" (~p)", [Type|Args]++[Meta])
+            nkserver_callbacks:trace_event(Type, Txt, Args, Meta, #nkserver_span{})
     end.
 
 
@@ -258,8 +257,7 @@ trace(Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
                     ok
             end;
         undefined ->
-            % Traces without active span are printed as debug
-            lager:debug("TRACE "++Txt, Args)
+            nkserver_callbacks:trace_trace(Txt, Args, Meta, #nkserver_span{})
     end.
 
 
@@ -306,8 +304,7 @@ log(Level, Txt, Args, Meta) when is_atom(Level), is_list(Txt), is_list(Args), is
                             ok
                     end;
                 undefined ->
-                    % Logs without active span are printed with desired level
-                    lager:log(Level, [], "Trace LOG "++Txt, Args)
+                    nkserver_callbacks:trace_log(Level, Txt, Args, Meta, #nkserver_span{})
             end;
         false ->
             lager:error("Invalid log level: ~p", [Level])
@@ -329,7 +326,7 @@ error(Error) ->
                     lager:warning("Exception calling nkserver_trace:span_error() ~p ~p (~p)", [Class, Reason, Stack])
             end;
         undefined ->
-            lager:notice("Trace ERROR: ~p", [Error])
+            nkserver_callbacks:trace_error(Error, #nkserver_span{})
     end.
 
 
@@ -348,7 +345,7 @@ tags(Tags) ->
                     lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
             end;
         undefined ->
-            lager:debug("Trace TAGS: ~p", [Tags])
+            nkserver_callbacks:trace_tags(Tags, #nkserver_span{})
     end.
 
 

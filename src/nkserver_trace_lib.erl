@@ -303,4 +303,4 @@ log_level(#nkserver_span{levels=Levels}) ->
 
 %% @private
 audit_level(#nkserver_span{levels=Levels}) ->
-    nklib_util:get_value(trace, Levels, off).
+    nklib_util:get_value(audit, Levels, off).
