@@ -257,7 +257,7 @@ trace(Txt, Args, Meta) when is_list(Txt), is_list(Args), is_map(Meta) ->
                     ok
             end;
         undefined ->
-            nkserver_callbacks:trace_trace(Txt, Args, Meta, #nkserver_span{})
+            ok
     end.
 
 
@@ -345,7 +345,7 @@ tags(Tags) ->
                     lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
             end;
         undefined ->
-            nkserver_callbacks:trace_tags(Tags, #nkserver_span{})
+            ok
     end.
 
 
