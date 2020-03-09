@@ -250,7 +250,7 @@ do_lager(Level, Type, Txt, Args, Data, #nkserver_span{name=Name, meta=Meta}=Span
     case Level >= log_level(Span) of
         true ->
             Txt2 = [
-                "~s ",
+                "SPAN ~s: ",
                 case Level of
                     ?LEVEL_EVENT -> "EVENT '~s' ";
                     _ -> []
