@@ -315,10 +315,11 @@ trace_finish_span(_Span) ->
 
 %% @doc Called when nkserver_trace:span_error/3 is called
 -spec trace_error(nkserver:status(), nkserver_trace:span()) ->
-    any().
+    nkserver:status().
 
 trace_error(Error, _Span) ->
-    lager:info("ERROR: ~p", [Error]).
+    lager:info("ERROR: ~p", [Error]),
+    Error.
 
 
 %% @doc Called when nkserver_trace:event/2,3 is called

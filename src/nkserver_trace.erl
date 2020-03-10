@@ -154,7 +154,8 @@ span_parent() ->
                 ?CALL_SRV(SrvId, trace_span_parent, [Span])
             catch
                 Class:Reason:Stack ->
-                    lager:warning("Exception calling nkserver_trace:update() ~p ~p (~p)", [Class, Reason, Stack])
+                    lager:warning("Exception calling nkserver_trace:update() ~p ~p (~p)", [Class, Reason, Stack]),
+                    undefined
             end;
         undefined ->
             undefined
@@ -313,20 +314,21 @@ log(Level, Txt, Args, Meta) when is_atom(Level), is_list(Txt), is_list(Args), is
 
 %% @doc Mark an span as error
 -spec error(nkserver:status()) ->
-    any().
+    {error, nkserver:status()}.
 
 error(Error) ->
     case get_last_span() of
         #nkserver_span{srv=SrvId}=Span ->
             try
                 ?CALL_SRV(SrvId, trace_error, [Error, Span]),
-                ok
+                {error, Error}
             catch
                 Class:Reason:Stack ->
                     lager:warning("Exception calling nkserver_trace:span_error() ~p ~p (~p)", [Class, Reason, Stack])
             end;
         undefined ->
-            nkserver_callbacks:trace_error(Error, #nkserver_span{})
+            nkserver_callbacks:trace_error(Error, #nkserver_span{}),
+            {error, Error}
     end.
 
 
