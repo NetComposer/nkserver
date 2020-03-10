@@ -141,7 +141,8 @@ log(_LevelName, _Txt, _Args, _Data, _Span) ->
 tags(Tags, #nkserver_span{id=Id}=Span) ->
     case trace_level(Span) < ?LEVEL_OFF of
         true ->
-            nkserver_ot:tags(Id, Tags);
+            Tags2 = nkserver_trace:flatten_tags(Tags),
+            nkserver_ot:tags(Id, Tags2);
         false ->
             ok
     end,
