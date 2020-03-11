@@ -58,11 +58,13 @@ new(Span, Opts) ->
             SpanHex = nkserver_ot:span_id_hex(SpanId),
             % http://127.0.0.1:16686/trace/TraceHexuiFind=SpanHex
             nkserver_ot:tags(SpanId, Tags2),
+            MetaMeta = maps:get(metadata, Meta, #{}),
             Meta#{
-                trace_id => TraceHex,
-                span_id => SpanHex,
-                span_name => Name,
-                target => maps:get(target, Meta, Name)
+                target => maps:get(target, Meta, Name),
+                metadata => MetaMeta#{
+                    trace_id => TraceHex,
+                    span_id => SpanHex
+                }
             };
         false ->
             Meta
