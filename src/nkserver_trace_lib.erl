@@ -28,7 +28,7 @@
 
 new(Span, Opts) ->
     #nkserver_span{srv=SrvId, id=SpanId, name=Name, meta=Meta} = Span,
-    Meta2 = Meta, %maps:merge(#{target=>Name}, Meta),
+    Meta2 = maps:merge(#{target=>Name}, Meta),
     Meta3 = case trace_level(Span) < ?LEVEL_OFF of
         true ->
             TraceParent = case Opts of
