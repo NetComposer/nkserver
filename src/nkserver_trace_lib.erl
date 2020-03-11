@@ -28,7 +28,8 @@
 
 new(Span, Opts) ->
     #nkserver_span{srv=SrvId, id=SpanId, name=Name, meta=Meta} = Span,
-    Meta2 = case trace_level(Span) < ?LEVEL_OFF of
+    Meta2 = Meta, %maps:merge(#{target=>Name}, Meta),
+    Meta3 = case trace_level(Span) < ?LEVEL_OFF of
         true ->
             TraceParent = case Opts of
                 #{parent:=OptsParent} when OptsParent/=undefined ->
@@ -58,18 +59,17 @@ new(Span, Opts) ->
             SpanHex = nkserver_ot:span_id_hex(SpanId),
             % http://127.0.0.1:16686/trace/TraceHexuiFind=SpanHex
             nkserver_ot:tags(SpanId, Tags2),
-            MetaMeta = maps:get(metadata, Meta, #{}),
-            Meta#{
-                target => maps:get(target, Meta, Name),
+            MetaMeta = maps:get(metadata, Meta2, #{}),
+            Meta2#{
                 metadata => MetaMeta#{
                     trace_id => TraceHex,
                     span_id => SpanHex
                 }
             };
         false ->
-            Meta
+            Meta2
     end,
-    Span2 = Span#nkserver_span{meta = Meta2},
+    Span2 = Span#nkserver_span{meta = Meta3},
     log(debug, "span started", [], #{}, Span2),
     {ok, Span2}.
 
