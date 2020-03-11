@@ -222,16 +222,12 @@ do_audit(Level, Type, Txt, Args, Data, #nkserver_span{name=Name, meta=Meta, opts
                         _ ->
                             list_to_binary(io_lib:format(Txt, Args))
                     end,
-                    Core = [app, group, resource, target, namespace],
-                    BaseMeta = maps:with(Core, Meta),
-                    ExtraMeta = maps:without(Core, Meta),
-                    AuditMsg = BaseMeta#{
+                    AuditMsg = Meta#{
                         level => Level,
                         type => Type,
                         span => Name,
                         reason => Reason,
-                        data => Data,
-                        metadata => ExtraMeta
+                        data => Data
                     },
                     ok = nkserver_audit_sender:store(AuditSrv, AuditMsg);
                 _ ->
