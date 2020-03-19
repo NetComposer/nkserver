@@ -181,11 +181,7 @@ do_trace(Level, Type, Txt, Args, Data, #nkserver_span{id=SpanId}=Span) ->
     case Level >= trace_level(Span) of
         true ->
             Txt2 = [
-                case Level of
-                    ?LEVEL_TRACE -> [];
-                    ?LEVEL_EVENT -> "EVENT '~s' ";
-                    _ -> "[~s] "
-                end,
+                "[~s] ",
                 Txt,
                 case map_size(Data) of
                     0 -> [];
@@ -193,11 +189,7 @@ do_trace(Level, Type, Txt, Args, Data, #nkserver_span{id=SpanId}=Span) ->
                 end
             ],
             Args2 =
-                case Level of
-                    ?LEVEL_TRACE -> [];
-                    _ -> [Type]
-                end ++
-                Args ++
+                [Type|Args] ++
                 case map_size(Data) of
                     0 -> [];
                     _ -> [Data]
