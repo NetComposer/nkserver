@@ -93,23 +93,29 @@ new_span(last, SpanId, Fun, Opts) ->
     end;
 
 new_span(SrvId, SpanId, Fun, Opts) ->
-    case ?CALL_SRV(SrvId, trace_new_span, [SrvId, SpanId, Opts]) of
-        {ok, #nkserver_span{}=Span} when Fun == infinity ->
-            do_span_push(Span),
-            ok;
-        {ok, #nkserver_span{name=Name}=Span} ->
-            do_span_push(Span),
-            try
-                Fun()
-            catch
-                Class:Reason:Stack ->
-                    log(warning, "Span ~s Trace exception '~s' (~p) (~p)", [Name, Class, Reason, Stack]),
-                    erlang:raise(Class, Reason, Stack)
-            after
-                finish_span()
-            end;
-        {error, Error} ->
-            {error, {trace_creation_error, Error}}
+    try
+        case ?CALL_SRV(SrvId, trace_new_span, [SrvId, SpanId, Opts]) of
+            {ok, #nkserver_span{}=Span} when Fun == infinity ->
+                do_span_push(Span),
+                ok;
+            {ok, #nkserver_span{name=Name}=Span} ->
+                do_span_push(Span),
+                try
+                    Fun()
+                catch
+                    Class:Reason:Stack ->
+                        log(warning, "Span ~s Trace exception '~s' (~p) (~p)", [Name, Class, Reason, Stack]),
+                        erlang:raise(Class, Reason, Stack)
+                after
+                    finish_span()
+                end;
+            {error, Error} ->
+                {error, {trace_creation_error, Error}}
+        end
+    catch
+        Class2:Reason2:Stack2 ->
+            log(warning, "Span trace creation exception '~s' (~p) (~p)", [Class2, Reason2, Stack2]),
+            Fun()
     end.
 
 
