@@ -104,7 +104,8 @@ new_span(SrvId, SpanId, Fun, Opts) ->
                     Fun()
                 catch
                     Class:Reason:Stack ->
-                        log(warning, "Span ~s Trace exception '~s' (~p) (~p)", [Name, Class, Reason, Stack]),
+                        log(warning, "Span <~s> trace exception '~s' (~p) (~p)", [Name, Class, Reason, Stack]),
+                        ?MODULE:error(exception),
                         erlang:raise(Class, Reason, Stack)
                 after
                     finish_span()
