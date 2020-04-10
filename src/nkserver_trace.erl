@@ -109,6 +109,8 @@ new_span(SrvId, SpanId, Fun, Opts) ->
             after
                 finish_span()
             end;
+        error when Fun==infinity ->
+            ok;
         error ->
             % If the creation of span fails, we should not stop the code,
             % only execute without spans
@@ -138,14 +140,17 @@ do_new_span(SrvId, SpanId, Opts) ->
     any().
 
 finish_span() ->
-    #nkserver_span{srv=SrvId} = Span = do_span_pop(),
-    try
-        ?CALL_SRV(SrvId, trace_finish_span, [Span])
-    catch
-        Class:Reason:Stack ->
-            lager:warning("Exception calling trace_finish_span: ~p ~p (~p)", [Class, Reason, Stack])
+    case do_span_pop() of
+        #nkserver_span{srv=SrvId}=Span ->
+            try
+                ?CALL_SRV(SrvId, trace_finish_span, [Span])
+            catch
+                Class:Reason:Stack ->
+                    lager:warning("Exception calling trace_finish_span: ~p ~p (~p)", [Class, Reason, Stack])
+            end;
+        undefined ->
+            ok
     end.
-
 
 
 %% @doc Perform a number of updates operations on a span
