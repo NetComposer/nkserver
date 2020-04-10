@@ -93,30 +93,42 @@ new_span(last, SpanId, Fun, Opts) ->
     end;
 
 new_span(SrvId, SpanId, Fun, Opts) ->
-    try
-        case ?CALL_SRV(SrvId, trace_new_span, [SrvId, SpanId, Opts]) of
-            {ok, #nkserver_span{}=Span} when Fun == infinity ->
-                do_span_push(Span),
-                ok;
-            {ok, #nkserver_span{name=Name}=Span} ->
-                do_span_push(Span),
-                try
-                    Fun()
-                catch
-                    Class:Reason:Stack ->
-                        log(warning, "Span <~s> trace exception '~s' (~p) (~p)", [Name, Class, Reason, Stack]),
-                        ?MODULE:error(exception),
-                        erlang:raise(Class, Reason, Stack)
-                after
-                    finish_span()
-                end;
-            {error, Error} ->
-                {error, {trace_creation_error, Error}}
-        end
-    catch
-        Class2:Reason2:Stack2 ->
-            log(warning, "Span trace creation exception '~s' (~p) (~p)", [Class2, Reason2, Stack2]),
+    case do_new_span(SrvId, SpanId, Opts) of
+        #nkserver_span{}=Span when Fun == infinity ->
+            do_span_push(Span),
+            ok;
+        #nkserver_span{name=Name}=Span ->
+            do_span_push(Span),
+            try
+                Fun()
+            catch
+                Class:Reason:Stack ->
+                    log(warning, "Span <~s> trace exception '~s' (~p) (~p)", [Name, Class, Reason, Stack]),
+                    ?TRACE_ERROR(exception),
+                    erlang:raise(Class, Reason, Stack)
+            after
+                finish_span()
+            end;
+        error ->
+            % If the creation of span fails, we should not stop the code,
+            % only execute without spans
             Fun()
+    end.
+
+
+%% @private
+do_new_span(SrvId, SpanId, Opts) ->
+    try ?CALL_SRV(SrvId, trace_new_span, [SrvId, SpanId, Opts]) of
+        {ok, #nkserver_span{}=Span} ->
+            Span;
+        {error, Error} ->
+            log(warning, "Span '~p' trace creation error: ~p", [SpanId, Error]),
+            error
+    catch
+        Class:Reason:Stack ->
+            log(warning, "Span '~p' trace creation exception for: '~s' (~p) (~p)",
+                [SpanId, Class, Reason, Stack]),
+            error
     end.
 
 
@@ -127,8 +139,13 @@ new_span(SrvId, SpanId, Fun, Opts) ->
 
 finish_span() ->
     #nkserver_span{srv=SrvId} = Span = do_span_pop(),
-    ?CALL_SRV(SrvId, trace_finish_span, [Span]),
-    ok.
+    try
+        ?CALL_SRV(SrvId, trace_finish_span, [Span])
+    catch
+        Class:Reason:Stack ->
+            lager:warning("Exception calling trace_finish_span: ~p ~p (~p)", [Class, Reason, Stack])
+    end.
+
 
 
 %% @doc Perform a number of updates operations on a span
@@ -142,7 +159,7 @@ update_span(Operations) ->
                 ?CALL_SRV(SrvId, trace_update_span, [Operations, Span])
             catch
                 Class:Reason:Stack ->
-                    lager:warning("Exception calling nkserver_trace:update() ~p ~p (~p)", [Class, Reason, Stack])
+                    lager:warning("Exception calling trace_update_span: ~p ~p (~p)", [Class, Reason, Stack])
             end;
         undefined ->
             ok
@@ -161,7 +178,7 @@ span_parent() ->
                 ?CALL_SRV(SrvId, trace_span_parent, [Span])
             catch
                 Class:Reason:Stack ->
-                    lager:warning("Exception calling nkserver_trace:update() ~p ~p (~p)", [Class, Reason, Stack]),
+                    lager:warning("Exception calling trace_span_parent: ~p ~p (~p)", [Class, Reason, Stack]),
                     undefined
             end;
         undefined ->
