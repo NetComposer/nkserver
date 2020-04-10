@@ -43,5 +43,8 @@
     opts = #{} :: map
 }).
 
+-define(TRACE_ERROR(Error), nkserver_trace:error(Error)).
+
+
 -endif.
 
