@@ -128,7 +128,7 @@ do_new_span(SrvId, SpanId, Opts) ->
             error
     catch
         Class:Reason:Stack ->
-            log(warning, "Span '~p' trace creation exception for: '~s' (~p) (~p)",
+            log(warning, "Span '~p' trace creation exception: '~s' (~p) (~p)",
                 [SpanId, Class, Reason, Stack]),
             error
     end.
