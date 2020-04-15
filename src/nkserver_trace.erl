@@ -204,6 +204,7 @@ event(Type) ->
 %% @doc Generates a new trace event
 %% It calls callback trace_event.
 %% By default, it will only log the event
+%% Called from nkactor_srv_lib:event/2 and many others
 -spec event(term(), map()) ->
     ok.
 
