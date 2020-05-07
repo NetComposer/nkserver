@@ -193,7 +193,7 @@ get_status() ->
     [pid()].
 
 get_instances() ->
-    nkserver_srv:get_instances().
+    nkserver_srv:get_all_global().
 
 
 %% @doc Gets all cluster instances for a service, only in running state
@@ -201,7 +201,7 @@ get_instances() ->
     [pid()].
 
 get_instances(SrvId) ->
-    nkserver_srv:get_instances(SrvId).
+    nkserver_srv:get_all_global(SrvId).
 
 
 %% @doc Gets all cluster instances for a service, only in running state

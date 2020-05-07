@@ -38,7 +38,7 @@
 
 -export([start_link/1, replace/2, get_status/1, set_active/2]).
 -export([get_all_local/0, get_all_local/1, get_service/1]).
--export([get_instances/0, get_instances/1, get_instances/2, get_random_instance/1]).
+-export([get_all_global/0, get_all_global/1, get_instances/2, get_random_instance/1]).
 -export([call/2, call/3, cast/2]).
 -export([recompile/1]).
 -export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2,
@@ -139,31 +139,23 @@ get_all_local() ->
     [{id(), nkserver:class(), pid()}].
 
 get_all_local(Class) when is_atom(Class) ->
-    [{SrvId, Hash, Pid} || {{SrvId, Hash}, Pid} <- nklib_proc:values({?MODULE, Class})].
+    [{SrvId, Hash, Pid} || {SrvId, Class, Hash, Pid} <- get_all_local()].
 
 
 %% @doc Gets all started instances
--spec get_instances() ->
+-spec get_all_global() ->
     [pid()].
 
-get_instances() ->
+get_all_global() ->
     pg2:get_members(?MODULE).
 
 
 %% @doc Gets all started services for a service
--spec get_instances(nkserver:id()) ->
+-spec get_all_global(nkserver:id()) ->
     [pid()].
 
-get_instances(SrvId) ->
+get_all_global(SrvId) ->
     pg2:get_members({?MODULE, SrvId}).
-
-
-%% @doc Gets all started services for a service
--spec get_instances(nkserver:id(), binary()) ->
-    [pid()].
-
-get_instances(SrvId, Vsn) ->
-    pg2:get_members({?MODULE, SrvId, Vsn}).
 
 
 %% @private Compatibility
@@ -234,8 +226,8 @@ handle_call({nkserver_set_active, Bool}, _From, State) ->
     end,
     {reply, ok, do_update_status(NewStatus, State)};
 
-handle_call({nkserver_replace, Opts}, _From, State) ->
-    case do_update(Opts, State) of
+handle_call({nkserver_replace, Spec}, _From, State) ->
+    case do_update(Spec, State) of
         {ok, State2} ->
             {reply, ok, State2};
         {error, Error} ->
@@ -297,7 +289,7 @@ handle_info(nkserver_timed_check_status, State) ->
 handle_info({'DOWN', _Ref, process, Pid, Reason}, #state{worker_sup_pid =Pid}=State) ->
     ?LLOG(warning, "service supervisor has failed!: ~p", [Reason], State),
     State2 = set_workers_supervisor(State),
-    State3 = do_update_status({error, supervisor_failed}, State2),
+    State3 = do_update_status({error, workers_sup__failed}, State2),
     {noreply, State3};
 
 handle_info(Msg, State) ->
@@ -435,7 +427,7 @@ do_start_plugins(#state{service =Service}=State) ->
         ok ->
             do_update_status(running, State);
         {error, Error} ->
-            do_stop_plugins(Plugins, State),
+            do_stop_plugins(true, State),
             do_update_status({error, Error}, State)
     end.
 
@@ -534,18 +526,18 @@ do_update_plugins(NewService, #state{id=SrvId, class=Class, service =OldService}
     ToUpdate = OldPlugins -- ToStop -- ToStart,
     ?SRV_LOG(info, "updating service (start:~p, stop:~p, update:~p",
         [ToStart, ToStop, ToUpdate], OldService),
-    do_stop_plugins(ToStop, State),
+    do_stop_plugins(ToStop, true, State),
     case do_update_plugins(ToUpdate, NewService, State) of
         ok ->
             case do_start_plugins(ToStart, State) of
                 ok ->
                     ok;
                 {error, Error} ->
-                    do_stop_plugins(lists:usort(NewPlugins++OldPlugins), State),
+                    do_stop_plugins(lists:usort(NewPlugins++OldPlugins), true, State),
                     {error, Error}
             end;
         {error, Error} ->
-            do_stop_plugins(OldPlugins, State),
+            do_stop_plugins(OldPlugins, true, State),
             {error, Error}
     end.
 
@@ -578,9 +570,7 @@ do_update_plugins([Plugin|Rest], NewService, State) ->
 
 
 %% @private
-do_update_status({error, Error}, #state{id=SrvId, vsn=Vsn, status=SrvStatus}=State) ->
-    pg2:leave({?MODULE, SrvId}, self()),
-    pg2:leave({?MODULE, SrvId, Vsn}, self()),
+do_update_status({error, Error}, #state{status=SrvStatus}=State) ->
     Now = nklib_date:epoch(msecs),
     ?LLOG(notice, "service status 'failed': ~p", [Error], State),
     SrvStatus2 = SrvStatus#{
@@ -591,7 +581,7 @@ do_update_status({error, Error}, #state{id=SrvId, vsn=Vsn, status=SrvStatus}=Sta
     },
     State#state{status=SrvStatus2};
 
-do_update_status(NewStatus, #state{id=SrvId, vsn=Vsn, status=SrvStatus}=State) ->
+do_update_status(NewStatus, #state{status=SrvStatus}=State) ->
     case maps:get(status, SrvStatus) of
         NewStatus ->
             State;
@@ -600,14 +590,6 @@ do_update_status(NewStatus, #state{id=SrvId, vsn=Vsn, status=SrvStatus}=State) -
         stopped when NewStatus==stopping ->
             State;
         Status ->
-            case NewStatus of
-                running ->
-                    pg2:join({?MODULE, SrvId}, self()),
-                    pg2:join({?MODULE, SrvId, Vsn}, self());
-                _ ->
-                    pg2:leave({?MODULE, SrvId}, self()),
-                    pg2:leave({?MODULE, SrvId, Vsn}, self())
-            end,
             ?LLOG(notice, "service status updated '~s' -> '~s'",
                      [Status, NewStatus], State),
             SrvStatus2 = SrvStatus#{
