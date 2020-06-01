@@ -255,6 +255,8 @@ get_callback_mod(Plugin) ->
     case code:ensure_loaded(Mod) of
         {module, _} ->
             Mod;
+        {error, embedded} ->
+            Mod;
         {error, nofile} ->
             case code:ensure_loaded(Plugin) of
                 {module, _} ->
