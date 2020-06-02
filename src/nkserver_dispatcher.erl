@@ -201,7 +201,7 @@ make_plugin_funs(Plugins, Id) ->
 
 %% @private
 make_plugin_funs([Plugin|Rest], Id, Map) ->
-    case nkserver_config:get_callback_mod(Plugin) of
+    case nkserver_config:get_callback_mod(Plugin, Id) of
         undefined ->
             make_plugin_funs(Rest, Id, Map);
         Mod ->

@@ -21,7 +21,7 @@
 -module(nkserver_config).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([config/4, get_plugin_mod/1, get_callback_mod/1]).
+-export([config/4, get_plugin_mod/1, get_callback_mod/2]).
 
 -include("nkserver.hrl").
 
@@ -250,7 +250,11 @@ get_plugin_mod_check(Plugin) ->
 
 
 %% @private
-get_callback_mod(Plugin) ->
+%% For the main callback, we don't expect _callback
+get_callback_mod(Id, Id) ->
+    Id;
+
+get_callback_mod(Plugin, _Id) ->
     Mod = list_to_atom(atom_to_list(Plugin)++"_callbacks"),
     case code:ensure_loaded(Mod) of
         {module, _} ->
