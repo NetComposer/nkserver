@@ -51,7 +51,7 @@ make_span(SrvId, SpanId, Name, Levels, Meta, Opts) when is_list(Levels) ->
     #nkserver_span{
         srv = SrvId,
         id = SpanId,
-        name = Name,
+        name = to_bin(Name),
         levels = Levels2,
         meta = Meta,
         opts = Opts
@@ -374,7 +374,7 @@ tags(Tags) ->
                 ok
             catch
                 Class:Reason:Stack ->
-                    lager:warning("Exception calling nkserver_trace:log() ~p ~p (~p)", [Class, Reason, Stack])
+                    lager:warning("Exception calling nkserver_trace:tags() ~p ~p (~p)", [Class, Reason, Stack])
             end;
         undefined ->
             ok
